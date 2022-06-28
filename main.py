@@ -9,6 +9,7 @@ from api.common import env_var
 
 logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
 __version__ = "1.0.0"
+logger = logging.getLogger(__name__)
 
 
 def default_error_handler(error):

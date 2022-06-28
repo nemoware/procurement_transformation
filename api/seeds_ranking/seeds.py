@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime
 
 from scipy import spatial
@@ -20,6 +21,7 @@ import re
 from api.seeds_ranking.asuz.integration import get_procurements
 
 exclude_pos = [ADP, CONJ, CCONJ, PUNCT, SCONJ, SYM]
+logger = logging.getLogger(__name__)
 
 
 def noun_chunks(obj):

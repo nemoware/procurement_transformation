@@ -13,20 +13,32 @@ api = Blueprint('seeds_ranking', __name__)
 @api.route('/api/seeds', methods=['POST'])
 @validate_schema(schemas.seeds)
 def get_seeds():
-    zakupki_queries, marker_queries = generate_seeds(request.json['input_query'])
-    return jsonify(dict(zakupki_gov_optimized=zakupki_queries, marker_interfax_optimized=marker_queries))
+    try:
+        zakupki_queries, marker_queries = generate_seeds(request.json['input_query'])
+        return jsonify(dict(zakupki_gov_optimized=zakupki_queries, marker_interfax_optimized=marker_queries))
+    except Exception as e:
+        logger.exception(e)
+        raise
 
 
 @api.route('/api/findlots', methods=['POST'])
 @validate_schema(schemas.findlots)
 def find_lots():
-    return jsonify(filter_asuz_data(request.json))
+    try:
+        return jsonify(filter_asuz_data(request.json))
+    except Exception as e:
+        logger.exception(e)
+        raise
 
 
 @api.route('/api/calculate_similarity', methods=['POST'])
 @validate_schema(schemas.calculate_similarity)
 def calculate_similarity():
-    subjects = filter_by_similarity(request.json['name_subject'], request.json['search_results'], 'name_objects')
-    for subject in subjects:
-        subject.pop('name_objects', None)
-    return jsonify(subjects)
+    try:
+        subjects = filter_by_similarity(request.json['name_subject'], request.json['search_results'], 'name_objects')
+        for subject in subjects:
+            subject.pop('name_objects', None)
+        return jsonify(subjects)
+    except Exception as e:
+        logger.exception(e)
+        raise
