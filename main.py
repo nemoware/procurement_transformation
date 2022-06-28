@@ -1,11 +1,10 @@
-import argparse
 import logging
 
 import flask
-from werkzeug.exceptions import HTTPException
 
-from api.seeds_ranking.routes import api as seeds_ranking_api
 from api.common import env_var
+from api.seeds_ranking.routes import api as seeds_ranking_api
+from db import db_init
 
 logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
 __version__ = "1.0.0"
@@ -25,5 +24,6 @@ def create_app():
 
 
 if __name__ == "__main__":
-    port = env_var('PROCUREMENT_SERVICE_PORT', 5001)
-    create_app().run(host='0.0.0.0', port=port)
+    if db_init.create_table():
+        port = env_var('PROCUREMENT_SERVICE_PORT', 5001)
+        create_app().run(host='0.0.0.0', port=port)
