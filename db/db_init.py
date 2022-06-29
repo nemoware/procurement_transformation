@@ -3,12 +3,10 @@ import peewee
 
 from db.config import db_handle
 from db.entity.lot import Lot
-from db.entity.rate import Rate
-from db.entity.segment import Segment
-from db.entity.service import Service
-from db.entity.stage import Stage
-from db.entity.sub_segment import Sub_segment
-from db.entity.unit import Unit
+from db.entity.simple_entity import *
+from tqdm import tqdm
+
+from db.generator import generate_
 
 
 def create_table() -> bool:
@@ -21,20 +19,21 @@ def create_table() -> bool:
         Segment.create_table(safe=True)
         Rate.create_table(safe=True)
         Lot.create_table(safe=True)
-        parse_reference_book()
+        generate_()
+        # parse_reference_book()
         return True
     except peewee.InternalError as px:
         print(str(px))
         return False
 
 
-def parse_reference_book():
+def parse_reference_book() -> None:
     df = pd.read_excel(open('УПРОЩ. КП ВР (Анализ рынка. Работы-Услуги)_v4_5.xlsm', 'rb'), sheet_name='Справочник')
-    print('first circle')
-    for index, row in df.iterrows():
+
+    for index, row in tqdm(df.iterrows(), desc="Load and save simple tables from excel", total=df.shape[0]):
         get_or_create(row)
-    print('second circle')
-    for index, row in df.iterrows():
+
+    for index, row in tqdm(df.iterrows(), desc="Generate lots", total=df.shape[0]):
         rate, segment, service, stage, sub_segment, unit = get_or_create(row)
         lot, created = Lot.get_or_create(
             segment_id=segment[0].id,

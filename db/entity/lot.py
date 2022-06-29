@@ -1,12 +1,4 @@
-from peewee import PrimaryKeyField, ForeignKeyField
-
-from db.entity.base_model import BaseModel
-from db.entity.rate import Rate
-from db.entity.segment import Segment
-from db.entity.service import Service
-from db.entity.stage import Stage
-from db.entity.sub_segment import Sub_segment
-from db.entity.unit import Unit
+from db.entity.simple_entity import *
 
 
 class Lot(BaseModel):
