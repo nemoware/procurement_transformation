@@ -1,13 +1,16 @@
+import logging
+
 import pandas as pd
 import peewee
 
 from db.config import db_handle
+from db.entity.historical_lot import HistoricalLot
 from db.entity.lot import Lot
 from db.entity.simple_entity import *
 from tqdm import tqdm
 
 from db.generator import generate_
-
+logger = logging.getLogger(__name__)
 
 def create_table() -> bool:
     try:
@@ -19,11 +22,12 @@ def create_table() -> bool:
         Segment.create_table(safe=True)
         Rate.create_table(safe=True)
         Lot.create_table(safe=True)
-        generate_()
+        HistoricalLot.create_table()
+        # generate_() #todo: move this logic in separate startup script
         # parse_reference_book()
         return True
     except peewee.InternalError as px:
-        print(str(px))
+        logger.exception(px)
         return False
 
 
