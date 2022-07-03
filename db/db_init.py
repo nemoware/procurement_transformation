@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import peewee
 
@@ -19,8 +20,10 @@ def create_table() -> bool:
         Segment.create_table(safe=True)
         Rate.create_table(safe=True)
         Lot.create_table(safe=True)
-        generate_()
+        Alternative_rate.create_table(safe=True)
+        Unit_synonym.create_table(safe=True)
         # parse_reference_book()
+        generate_()
         return True
     except peewee.InternalError as px:
         print(str(px))
@@ -34,15 +37,17 @@ def parse_reference_book() -> None:
         get_or_create(row)
 
     for index, row in tqdm(df.iterrows(), desc="Generate lots", total=df.shape[0]):
-        rate, segment, service, stage, sub_segment, unit = get_or_create(row)
-        lot, created = Lot.get_or_create(
-            segment_id=segment[0].id,
-            sub_segment_id=sub_segment[0].id,
-            service_code=service[0].code,
-            stage_id=stage[0].id,
-            rate_id=rate[0].id,
-            unit_id=unit[0].id,
-        )
+        rate, segment, service, stage, sub_segment, unit, amount = get_or_create(row)
+        if amount is not None and not np.isnan(amount):
+            for _ in range(int(amount) + 1):
+                lot = Lot.create(
+                    segment_id=segment[0].id,
+                    sub_segment_id=sub_segment[0].id,
+                    service_code=service[0].code,
+                    stage_id=stage[0].id,
+                    rate_id=rate[0].id,
+                    unit_id=unit[0].id,
+                )
 
 
 def get_or_create(row):
@@ -52,4 +57,5 @@ def get_or_create(row):
     stage = Stage.get_or_create(name=row['Наименование этапов/подэтапов услуг/работ'])
     rate = Rate.get_or_create(name=row['Наименование расценок'])
     unit = Unit.get_or_create(name=row['Наименование ЕИ'])
-    return rate, segment, service, stage, sub_segment, unit
+    amount = row['Количество закупок по ЕИ']
+    return rate, segment, service, stage, sub_segment, unit, amount
