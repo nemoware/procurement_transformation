@@ -1,17 +1,16 @@
 from collections import Counter
 
 from openpyxl import load_workbook
-from peewee import JOIN
-from playhouse.shortcuts import model_to_dict
 
 from db.entity.lot import Lot
 from db.entity.simple_entity import Segment, Sub_segment, Service, Stage, Unit, Rate
+from itertools import groupby
 
 
 def generate_():
-    segment_name = 'Консалтинг'
-    sub_segment_name = 'Аналитические исследования'
-    code = '91202'
+    segment_name = 'Разраб/Поддерж IT СистемИОборудования'
+    sub_segment_name = '-'
+    code = '11272'
     workbook = load_workbook(filename="Пустой шаблон.xlsm")
     sheet = workbook["Форма КП (для анализа рынка) ВР"]
     sheet_reference_book = workbook["Справочник"]
@@ -26,12 +25,6 @@ def generate_():
                     .where(Segment.name == segment_name, Sub_segment.name == sub_segment_name, Service.code == code))
 
     list_of_lots = []
-    tree_of_lots = {
-        'segment_name': segment_name,
-        'sub_segment_name': sub_segment_name,
-        'service_code': code,
-        'stage': []
-    }
 
     for lot in current_lots:
         list_of_lots.append({
@@ -44,60 +37,36 @@ def generate_():
             'unit_name': lot.unit_id.name,
         })
 
-        stage_index = next(
-            (index for index, d in enumerate(tree_of_lots['stage']) if d["stage_name"] == lot.stage_id.name),
-            None
-        )
-        if stage_index is None:
-            tree_of_lots['stage'].append({
-                'stage_name': lot.stage_id.name,
-                'rates': [],
-                'count': 0
-            })
-            stage_index = -1
-        else:
-            tree_of_lots['stage'][stage_index]['count'] += 1
+    most_common_lots_by_stage_name: list[tuple[str, int]] = [
+        i for i in Counter(lot['stage_name'] for lot in list_of_lots).most_common(10)
+    ]
+    second_list_of_lots = []
+    for common in most_common_lots_by_stage_name:
+        second_list_of_lots.extend([x for x in list_of_lots if x['stage_name'] == common[0]])
 
-        rate_index = next(
-            (index for index, d in enumerate(tree_of_lots['stage'][stage_index]['rates']) if
-             d["rate_name"] == lot.rate_id.name),
-            None
-        )
-        if rate_index is None:
-            tree_of_lots['stage'][stage_index]['rates'].append({
-                'rate_name': lot.rate_id.name,
-                'units': [],
-                'count': 0
-            })
-            rate_index = -1
-        else:
-            tree_of_lots['stage'][stage_index]['rates'][rate_index]["count"] += 1
+    most_common_lots_by_rate_name = [i for i in
+                                     Counter(lot['rate_name'] for lot in second_list_of_lots).most_common(20)]
+    list_of_lots = []
+    for common in most_common_lots_by_rate_name:
+        list_of_lots.extend([x for x in second_list_of_lots if x['rate_name'] == common[0]])
 
-        unit_index = next(
-            (index for index, d in enumerate(tree_of_lots['stage'][stage_index]['rates'][rate_index]["units"])
-             if d["unit_name"] == lot.unit_id.name),
-            None
-        )
-        if unit_index is not None:
-            tree_of_lots['stage'][stage_index]['rates'][rate_index]["units"][unit_index]['count'] += 1
-            tree_of_lots['stage'][stage_index]['rates'][rate_index]["units"][unit_index]['ids'].append(
-                lot.procurement_id)
-        else:
-            tree_of_lots['stage'][stage_index]['rates'][rate_index]["units"].append({
-                'unit_name': lot.unit_id.name,
-                'ids': [lot.procurement_id],
-                'count': 0
-            })
+    most_common_lots_by_unit_name = [i for i in Counter(lot['unit_name'] for lot in list_of_lots).most_common()]
+    second_list_of_lots = []
+    for common in most_common_lots_by_unit_name:
+        second_list_of_lots.extend([x for x in list_of_lots if x['unit_name'] == common[0]])
 
-        # if not tree_of_lots['stage'][lot.stage_id.name].get(lot.rate_id.name):
-        #     tree_of_lots['stage'][lot.stage_id.name][lot.rate_id.name] = []
-        #
-        # tree_of_lots['stage'][lot.stage_id.name][lot.rate_id.name].append({
-        #     'id': lot.procurement_id,
-        #     'unit_name': lot.unit_id.name
-        # })
+    result_for_reference_book = []
+    for key, group_items in groupby(sorted(second_list_of_lots, key=lambda x: x['stage_name']),
+                                    lambda x: x['stage_name']):
+        update_lot = list(group_items)[0]
+        result_for_reference_book.append({'count': len(list(group_items)), **update_lot})
 
-    # most_common_lots_by_stage_name = [i for i in Counter(lot['stage_name'] for lot in list_of_lots).most_common(20)]
-    # list_of_lots = [x for x in list_of_lots if x['stage_name'] in most_common_lots_by_stage_name]
+    for lot in second_list_of_lots:
+        lot['number_of_stages'] = sum(1 for j in second_list_of_lots if j['stage_name'] == lot['stage_name'])
+        lot['number_of_rates'] = sum(1 for j in second_list_of_lots if
+                                     j['rate_name'] == lot['rate_name'] and j['stage_name'] == lot['stage_name'])
+        lot['number_of_units'] = sum(1 for j in second_list_of_lots if
+                                     j['unit_name'] == lot['unit_name'] and j['stage_name'] == lot['stage_name'] and j[
+                                         'rate_name'] == lot['rate_name'])
 
     print(sheet['B18'].value)
