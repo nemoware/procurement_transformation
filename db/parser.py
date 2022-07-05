@@ -46,3 +46,7 @@ def get_or_create(row):
     unit = Unit.get_or_create(name=row['Наименование ЕИ'])
     amount = row['Количество закупок по ЕИ']
     return rate, segment, service, stage, sub_segment, unit, amount
+
+
+if __name__ == "__main__":
+    parse_reference_book()
