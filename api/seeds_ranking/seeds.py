@@ -71,16 +71,16 @@ def noun_chunks(obj):
 
 
 def load_data():
-    print('Initialization')
+    logger.info('Initialization')
     data = json.load(open("api/seeds_ranking/embeddings/embeddings.json", "r", encoding='utf-8'))
     embeddings = pd.DataFrame.from_dict(data)
-    print(embeddings)
-    print('Precalculated embeddings loaded successfully')
+    #print(embeddings)
+    logger.info('Precalculated embeddings loaded successfully')
     return embeddings
 
 
 def load_lib():
-    print('Libs loading')
+    logger.info('Libs loading')
     model_name = 'ru_core_news_lg'
     nlp = None
     try:
@@ -93,7 +93,7 @@ def load_lib():
     morph = pymorphy2.MorphAnalyzer()
     stemmer = SnowballStemmer(language='russian')
     tokenizer = nltk.tokenize.WhitespaceTokenizer()
-    print('Libs loaded successfully')
+    logger.info('Libs loaded successfully')
     return nlp, morph, stemmer, tokenizer
 
 
@@ -135,12 +135,12 @@ def get_clean_noun_chunks(input_texts):
         sub_result = []
         names = []
         for ent in doc.ents:
-            print(ent.text, ent.start_char, ent.end_char, ent.label_)
+            logger.debug(ent.text, ent.start_char, ent.end_char, ent.label_)
             ner_text = ent.text.lower()
             if 'газпром' not in ner_text:
                 names.append(ner_text)
         for chunk in doc.noun_chunks:
-            print(chunk.text, chunk.start_char, chunk.end_char, chunk.label_)
+            logger.debug(chunk.text, chunk.start_char, chunk.end_char, chunk.label_)
             exclude_chunk = False
             for ent in doc.ents:
                 if ent.start_char <= chunk.start_char <= ent.end_char or ent.start_char <= chunk.end_char <= ent.end_char \
@@ -207,14 +207,14 @@ def exclude_stop_words(chunks):
 
 def generate_queries(query, length=0, n=10):
     chunks = get_clean_noun_chunks([query])[0]
-    print(chunks)
+    logger.debug(chunks)
     names = exclude_stop_words(chunks[1])
     unique_names = set(names)
     result = []
     names = ' '.join(unique_names)
     if len(chunks[0]) > 0:
         chunks4replace = exclude_stop_words(chunks[0])
-        print(chunks4replace)
+        logger.debug(chunks4replace)
         nearest_chunks = find_nearest_chunks(chunks4replace, n)
         result.append(' '.join(chunks4replace))
 

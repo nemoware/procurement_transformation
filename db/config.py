@@ -2,12 +2,18 @@ import os
 
 from peewee import *
 
-user = os.environ['DB_USER']
-password = os.environ['DB_PASSWORD']
-db_name = os.environ['DB_NAME']
+from api.common import env_var
+
+user = env_var('DB_USER', 'postgres')
+password = env_var('DB_PASSWORD')
+db_name = env_var('DB_NAME', 'procurement_transformation')
+host = env_var('DB_HOST', 'localhost')
+port = env_var('DB_port', 5432)
 
 db_handle = PostgresqlDatabase(
-    db_name, user=user,
+    db_name,
+    user=user,
     password=password,
-    host='localhost'
+    host='localhost',
+    port=port
 )
