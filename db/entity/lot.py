@@ -1,3 +1,5 @@
+from peewee import BooleanField
+
 from db.entity.simple_entity import *
 
 
@@ -9,3 +11,4 @@ class Lot(BaseModel):
     stage_id = ForeignKeyField(Stage)
     rate_id = ForeignKeyField(Rate)
     unit_id = ForeignKeyField(Unit)
+    is_null = BooleanField(null=True)
