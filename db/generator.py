@@ -28,7 +28,7 @@ def generate_():
 
     for lot in current_lots:
         list_of_lots.append({
-            # 'id': lot.procurement_id,
+            'id': lot.procurement_id,
             'segment_name': lot.segment_id.name,
             'sub_segment_name': lot.sub_segment_id.name,
             'service_code': lot.service_code.code,
