@@ -5,7 +5,7 @@ from db.entity.simple_entity import *
 
 
 class Lot(Model):
-    procurement_id = IntegerField(null=False)
+    procurement_id = CharField(null=False)
     segment_id = ForeignKeyField(Segment)
     sub_segment_id = ForeignKeyField(Sub_segment)
     service_code = ForeignKeyField(Service)

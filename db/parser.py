@@ -17,17 +17,17 @@ def parse_reference_book() -> None:
         #     print(123)
         if number_of_units is not None and not np.isnan(number_of_units):
             if number_of_units == 0:
-                # Lot.get_or_create(
-                #     procurement_id=0,
-                #     segment_id=segment[0].id,
-                #     sub_segment_id=sub_segment[0].id,
-                #     service_code=service[0].code,
-                #     stage_id=stage[0].id,
-                #     rate_id=rate[0].id,
-                #     unit_id=unit[0].id,
-                #     is_null=True,
-                #     is_from_excel=True
-                # )
+                Lot.get_or_create(
+                    procurement_id=0,
+                    segment_id=segment[0].id,
+                    sub_segment_id=sub_segment[0].id,
+                    service_code=service[0].code,
+                    stage_id=stage[0].id,
+                    rate_id=rate[0].id,
+                    unit_id=unit[0].id,
+                    is_null=True,
+                    is_from_excel=True
+                )
                 continue
             # if sub_segment[0].name == 'IT':
             #     print(123)
@@ -51,7 +51,7 @@ def parse_reference_book() -> None:
             if not tree_of_lots['procurements']:
                 for ind, id_from_list in enumerate(list(range(1, int(number_of_services) + 1))):
                     tree_of_lots['procurements'].append({
-                        'procurement_id': id_from_list,
+                        'procurement_id': 'арх' + str(id_from_list),
                         'stages': {},
                         'count': number_of_services
                     })
