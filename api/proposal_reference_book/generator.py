@@ -29,30 +29,90 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
 
     for lot in current_lots:
         list_of_lots.append({
+            'number_of_stages': 0,
+            'number_of_rates': 0,
             'id': lot.procurement_id,
-            'segment_name': lot.segment_id.name,
-            'sub_segment_name': lot.sub_segment_id.name,
             'service_code': lot.service_code.code,
             'stage_name': lot.stage_id.name,
             'rate_name': lot.rate_id.name,
             'unit_name': lot.unit_id.name,
-            'is_null': lot.is_null
+            'is_null': lot.is_null,
+            'segment_name': lot.segment_id.name,
+            'sub_segment_name': lot.sub_segment_id.name,
         })
-    list_of_lots = list(filter(lambda x: x['id'] != 0, list_of_lots))
+    list_of_lots = list(filter(lambda x: x['id'] != '0', list_of_lots))
+    list_of_ids = list(set(map(lambda x: x['id'], list_of_lots)))
+    list_of_ids.sort(key=lambda x: int(x[3:]))
+
+    empty_list_of_ids = []
+    empty_list_of_stages = []
+    empty_list_of_rates = []
+    empty_list_of_units = []
+    number_of_stages = {}
+
     for lot in list_of_lots:
-        lot['number_of_id'] = sum(1 for j in list_of_lots if
-                                  j['id'] != lot['id'] and
-                                  j['stage_name'] == lot['stage_name'] and
-                                  is_duplicate(j, lot))
-        lot['number_of_rates'] = sum(1 for j in list_of_lots if
-                                     j['rate_name'] == lot['rate_name'] and
-                                     j['stage_name'] == lot['stage_name'] and
-                                     is_duplicate(j, lot))
-        lot['number_of_units'] = sum(1 for j in list_of_lots if
-                                     j['unit_name'] == lot['unit_name'] and
-                                     j['stage_name'] == lot['stage_name'] and
-                                     j['rate_name'] == lot['rate_name'] and
-                                     is_duplicate(j, lot))
+        if lot['id'] not in empty_list_of_ids or lot['stage_name'] not in empty_list_of_stages:
+            empty_list_of_ids.append(lot['id'])
+            empty_list_of_stages.append(lot['stage_name'])
+
+            required_lot = [element for i, element in enumerate(list_of_lots) if
+                            element['id'] in empty_list_of_ids and
+                            element['stage_name'] == lot['stage_name']]
+            required_lot.sort(key=lambda x: x['number_of_stages'], reverse=True)
+
+            required_lot[0]['number_of_stages'] += 1
+            for element in required_lot:
+                element['number_of_stages'] = required_lot[0]['number_of_stages']
+
+            # if number_of_stages.get(lot['stage_name'], False):
+            #     number_of_stages[lot['stage_name']]['count'] += 1
+            # else:
+            #     number_of_stages[lot['stage_name']] = {
+            #         'count': 1
+            #     }
+
+    list_of_lots.sort(key=lambda x: x['number_of_stages'], reverse=True)
+    empty_list_of_stages = []
+
+    for lot in list_of_lots:
+        if next((item for item in empty_list_of_rates if
+                 list(item.keys())[0] != lot['stage_name'] and list(item.values())[0] != lot['rate_name']), False):
+            required_lot = [element for element in list_of_lots if
+                            element['stage_name'] == lot['stage_name'] and
+                            element['rate_name'] == lot['rate_name']]
+
+            required_lot.sort(key=lambda x: x['number_of_stages'], reverse=True)
+            required_lot[0]['number_of_rates'] += len(required_lot)
+
+            for element in required_lot[1:]:
+                element['number_of_rates'] = required_lot[0]['number_of_rates']
+
+        obj = {}
+        obj[lot['stage_name']] = lot['rate_name']
+        # empty_list_of_stages.append(lot['stage_name'])
+        empty_list_of_rates.append(obj)
+        # empty_list_of_units.append(lot['unit_name'])
+
+    number_of_stages = dict(reversed(sorted(number_of_stages.items(), key=lambda item: item[1]['count'], reverse=True)))
+    i = len(number_of_stages)
+    for stage in list(number_of_stages.keys()):
+        if i == 7: break
+        del number_of_stages[stage]
+        i -= 1
+
+    list_of_lots = list(filter(lambda x: number_of_stages.get(x['stage_name'], False), list_of_lots))
+    list_of_lots.sort(key=lambda x: number_of_stages[x['stage_name']]['count'], reverse=True)
+
+    number_of_rates = {}
+
+    for stage_name in number_of_stages:
+        for lot in list_of_lots:
+            if lot['stage_name'] == stage_name:
+                if not number_of_stages[stage_name].get(lot['rate_name'], False):
+                    number_of_stages[stage_name][lot['rate_name']] = 1
+                else:
+                    number_of_stages[stage_name][lot['rate_name']] += 1
+
     print(123)
     # print(sheet['B18'].value)
 
