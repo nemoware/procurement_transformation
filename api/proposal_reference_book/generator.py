@@ -198,16 +198,16 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
     shutil.copy("Пустой шаблон.xlsm", f"{service_code} {segment_name} {sub_segment_name}.xlsm")
 
     workbook = load_workbook(filename=f"{service_code} {segment_name} {sub_segment_name}.xlsm", read_only=False)
-
-    # ws = workbook["Форма КП (для анализа рынка) ВР"]
     ws = workbook["Справочник"]
 
-    # sheet_active = ws
-    # ws.insert_rows(1, 5)
     for index, lot in enumerate(list_without_duplicates_of_all_lots, start=1):
         ws.append(list(lot.values()))
-    # ws['A2'] = 1
 
+    ws = workbook["Форма КП (для анализа рынка) ВР"]
+    ws.insert_rows(18, 5)
+    ws.move_range(cell_range='A19:H21', rows=5)
+    # ws['A2'] = 1
+    # ws.insert_rows(1, 5)
     workbook.save(filename=f"{service_code} {segment_name} {sub_segment_name}.xlsm")
 
     print(123)
