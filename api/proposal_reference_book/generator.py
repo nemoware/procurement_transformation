@@ -1,120 +1,216 @@
-from collections import Counter
+import copy
+import itertools
+import shutil
 
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
+from peewee import fn, SQL
 
 from db.entity.lot import Lot
-from db.entity.simple_entity import Segment, Sub_segment, Service, Stage, Unit, Rate
-from itertools import groupby
+from db.entity.simple_entity import Segment, Sub_segment, Service, Unit
 
 
 def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, service_code=None, service_name=None,
                                 subject=None, guaranteed_volume=None):
     segment_name = 'Корпоратив защита и защита информации'
     sub_segment_name = '-'
-    code = '90303'
-    workbook = load_workbook(filename="Пустой шаблон.xlsm")
-    sheet = workbook["Форма КП (для анализа рынка) ВР"]
-    # sheet_reference_book = workbook["Справочник"]
+    service_code = '90303'
 
-    current_lots = (Lot.select(Lot, Segment, Sub_segment, Service, Stage, Rate, Unit)
+    list_of_stage_ids = []
+    list_of_rate_ids = []
+
+    current_stage_ids = (Lot.select(Lot.stage_id, fn.COUNT(Lot.stage_id).alias('num_stage_id'))
+                         .join(Segment).switch(Lot)
+                         .join(Sub_segment).switch(Lot)
+                         .join(Service).switch(Lot)
+                         .where(Segment.name == segment_name, Sub_segment.name == sub_segment_name,
+                                Service.code == service_code)
+                         .group_by(Lot.stage_id)
+                         .order_by(SQL('num_stage_id').desc()))
+
+    for lot in current_stage_ids:
+        list_of_stage_ids.append({
+            'stage_id': lot.stage_id.id,
+            'num_stage_id': lot.num_stage_id
+        })
+
+    list_of_stage_ids = list_of_stage_ids[:10]
+
+    current_rate_ids = (Lot.select(Lot.rate_id, fn.COUNT(Lot.stage_id).alias('num_rate_id'))
+                        .join(Segment).switch(Lot)
+                        .join(Sub_segment).switch(Lot)
+                        .join(Service).switch(Lot)
+                        .where((Segment.name == segment_name) &
+                               (Sub_segment.name == sub_segment_name) &
+                               (Service.code == service_code) &
+                               (Lot.stage_id << list(map(lambda x: x['stage_id'], list_of_stage_ids))))
+                        .group_by(Lot.rate_id)
+                        .order_by(SQL('num_rate_id').desc()))
+
+    for lot in current_rate_ids:
+        list_of_rate_ids.append({
+            'rate_id': lot.rate_id.id,
+            'num_rate_id': lot.num_rate_id
+        })
+    list_of_rate_ids = list_of_rate_ids[:20]
+
+    current_lots = (Lot.select(Lot)
                     .join(Segment).switch(Lot)
                     .join(Sub_segment).switch(Lot)
                     .join(Service).switch(Lot)
-                    .join(Stage).switch(Lot)
-                    .join(Rate).switch(Lot)
                     .join(Unit)
-                    .where(Segment.name == segment_name, Sub_segment.name == sub_segment_name, Service.code == code))
+                    .where((Segment.name == segment_name) &
+                           (Sub_segment.name == sub_segment_name) &
+                           (Service.code == service_code) &
+                           (Lot.stage_id << list(map(lambda x: x['stage_id'], list_of_stage_ids))) &
+                           (Lot.rate_id << list(map(lambda x: x['rate_id'], list_of_rate_ids))))
+                    )
 
     list_of_lots = []
+    del list_of_stage_ids, list_of_rate_ids, current_rate_ids, current_stage_ids
 
     for lot in current_lots:
         list_of_lots.append({
-            'number_of_stages': 0,
-            'number_of_rates': 0,
             'id': lot.procurement_id,
-            'service_code': lot.service_code.code,
-            'stage_name': lot.stage_id.name,
-            'rate_name': lot.rate_id.name,
-            'unit_name': lot.unit_id.name,
-            'is_null': lot.is_null,
             'segment_name': lot.segment_id.name,
             'sub_segment_name': lot.sub_segment_id.name,
+            'service_code': lot.service_code.code,
+            'stage_name': lot.stage_id.name,
+            'stage_id': lot.stage_id.id,
+            'rate_name': lot.rate_id.name,
+            'rate_id': lot.rate_id.id,
+            'unit_name': lot.unit_id.name,
+            'unit_id': lot.unit_id.id,
         })
+    del current_lots
+
+    current_lots = (Lot.select(Lot)
+                    .join(Segment).switch(Lot)
+                    .join(Sub_segment).switch(Lot)
+                    .join(Service).switch(Lot)
+                    .join(Unit)
+                    .where((Segment.name == segment_name) &
+                           (Sub_segment.name == sub_segment_name) &
+                           (Service.code == service_code) &
+                           (Lot.procurement_id != '0')))
+
+    list_of_all_lots = []
+    for lot in current_lots:
+        list_of_all_lots.append({
+            'segment_name': lot.segment_id.name,
+            'sub_segment_name': lot.sub_segment_id.name,
+            'service_code': lot.service_code.code,
+            'service_name': lot.service_code.name,
+            'number_of_service': 0,
+            'stage_name': lot.stage_id.name,
+            'number_of_stages': 0,
+            'percent_of_stages': 0,
+            'rate_name': lot.rate_id.name,
+            'number_of_rates': 0,
+            'percent_of_rates': 0,
+            'unit_name': lot.unit_id.name,
+            'number_of_units': 0,
+            'percent_of_units': 0,
+            'stage_id': lot.stage_id.id,
+            'rate_id': lot.rate_id.id,
+            'unit_id': lot.unit_id.id,
+            'id': lot.procurement_id,
+        })
+    del current_lots
+
+    number_of_all_stages = {}
+    list_if_ids = list(sorted(set(map(lambda x: x['id'], list_of_all_lots)), key=lambda x: int(x[3:])))
+    number_of_ids = len(list_if_ids)
+    list_of_stage_name = []
+
+    for id in list_if_ids:
+        lots = [single_lot for single_lot in list_of_all_lots if single_lot['id'] == id]
+        for lot in lots:
+            stage_name = lot['stage_name']
+            rate_name = lot['rate_name']
+            unit_name = lot['unit_name']
+            number_of_all_stages.setdefault(stage_name, {
+                'count': 0
+            })
+            if stage_name not in list_of_stage_name:
+                number_of_all_stages[stage_name]['count'] += 1
+                list_of_stage_name.append(stage_name)
+
+            number_of_all_stages[stage_name].setdefault(rate_name, {
+                'count': 0
+            })['count'] += 1
+            number_of_all_stages[stage_name][rate_name].setdefault(unit_name, {
+                'count': 0
+            })['count'] += 1
+        list_of_stage_name = []
+
+    del list_if_ids, lots, stage_name, rate_name, unit_name, id
+
+    for lot in list_of_all_lots:
+        lot['number_of_service'] = number_of_ids
+        lot['number_of_stages'] = number_of_all_stages[lot['stage_name']]['count']
+        lot['number_of_rates'] = number_of_all_stages[lot['stage_name']][lot['rate_name']]['count']
+        lot['number_of_units'] = number_of_all_stages[lot['stage_name']][lot['rate_name']][lot['unit_name']]['count']
+
     list_of_lots = list(filter(lambda x: x['id'] != '0', list_of_lots))
-    list_of_ids = list(set(map(lambda x: x['id'], list_of_lots)))
-    list_of_ids.sort(key=lambda x: int(x[3:]))
+    list_of_lots.sort(
+        key=lambda x: (
+            number_of_all_stages[x['stage_name']]['count'],
+            number_of_all_stages[x['stage_name']][x['rate_name']]['count'],
+            number_of_all_stages[x['stage_name']][x['rate_name']][x['unit_name']]['count']
+        ), reverse=True
+    )
+    list_without_duplicates_of_lots = []
+    for element in list_of_lots:
+        del element['id']
+    del element
 
-    empty_list_of_ids = []
-    empty_list_of_stages = []
-    empty_list_of_rates = []
-    empty_list_of_units = []
-    number_of_stages = {}
+    seen = set()
+    for d in list_of_lots:
+        t = tuple(d.items())
+        if t not in seen:
+            seen.add(t)
+            list_without_duplicates_of_lots.append(d)
+    for lot in list_without_duplicates_of_lots:
+        del lot['rate_id'], lot['stage_id'], lot['unit_id']
+    del seen, d, t, list_of_lots, lot
 
-    for lot in list_of_lots:
-        if lot['id'] not in empty_list_of_ids or lot['stage_name'] not in empty_list_of_stages:
-            empty_list_of_ids.append(lot['id'])
-            empty_list_of_stages.append(lot['stage_name'])
+    list_of_all_lots.sort(
+        key=lambda x: (
+            number_of_all_stages[x['stage_name']]['count'],
+            number_of_all_stages[x['stage_name']][x['rate_name']]['count'],
+            number_of_all_stages[x['stage_name']][x['rate_name']][x['unit_name']]['count']
+        ), reverse=True
+    )
 
-            required_lot = [element for i, element in enumerate(list_of_lots) if
-                            element['id'] in empty_list_of_ids and
-                            element['stage_name'] == lot['stage_name']]
-            required_lot.sort(key=lambda x: x['number_of_stages'], reverse=True)
+    for element in list_of_all_lots:
+        del element['id']
+    del element, number_of_ids
 
-            required_lot[0]['number_of_stages'] += 1
-            for element in required_lot:
-                element['number_of_stages'] = required_lot[0]['number_of_stages']
+    list_without_duplicates_of_all_lots = []
+    seen = set()
+    for d in list_of_all_lots:
+        t = tuple(d.items())
+        if t not in seen:
+            seen.add(t)
+            list_without_duplicates_of_all_lots.append(d)
+    del seen, d, t, list_of_all_lots
 
-            # if number_of_stages.get(lot['stage_name'], False):
-            #     number_of_stages[lot['stage_name']]['count'] += 1
-            # else:
-            #     number_of_stages[lot['stage_name']] = {
-            #         'count': 1
-            #     }
+    shutil.copy("Пустой шаблон.xlsm", f"{service_code} {segment_name} {sub_segment_name}.xlsm")
 
-    list_of_lots.sort(key=lambda x: x['number_of_stages'], reverse=True)
-    empty_list_of_stages = []
+    workbook = load_workbook(filename=f"{service_code} {segment_name} {sub_segment_name}.xlsm", read_only=False)
 
-    for lot in list_of_lots:
-        if next((item for item in empty_list_of_rates if
-                 list(item.keys())[0] != lot['stage_name'] and list(item.values())[0] != lot['rate_name']), False):
-            required_lot = [element for element in list_of_lots if
-                            element['stage_name'] == lot['stage_name'] and
-                            element['rate_name'] == lot['rate_name']]
+    # ws = workbook["Форма КП (для анализа рынка) ВР"]
+    ws = workbook["Справочник"]
 
-            required_lot.sort(key=lambda x: x['number_of_stages'], reverse=True)
-            required_lot[0]['number_of_rates'] += len(required_lot)
+    # sheet_active = ws
+    # ws.insert_rows(1, 5)
+    for index, lot in enumerate(list_without_duplicates_of_all_lots, start=1):
+        ws.append(list(lot.values()))
+    # ws['A2'] = 1
 
-            for element in required_lot[1:]:
-                element['number_of_rates'] = required_lot[0]['number_of_rates']
-
-        obj = {}
-        obj[lot['stage_name']] = lot['rate_name']
-        # empty_list_of_stages.append(lot['stage_name'])
-        empty_list_of_rates.append(obj)
-        # empty_list_of_units.append(lot['unit_name'])
-
-    number_of_stages = dict(reversed(sorted(number_of_stages.items(), key=lambda item: item[1]['count'], reverse=True)))
-    i = len(number_of_stages)
-    for stage in list(number_of_stages.keys()):
-        if i == 7: break
-        del number_of_stages[stage]
-        i -= 1
-
-    list_of_lots = list(filter(lambda x: number_of_stages.get(x['stage_name'], False), list_of_lots))
-    list_of_lots.sort(key=lambda x: number_of_stages[x['stage_name']]['count'], reverse=True)
-
-    number_of_rates = {}
-
-    for stage_name in number_of_stages:
-        for lot in list_of_lots:
-            if lot['stage_name'] == stage_name:
-                if not number_of_stages[stage_name].get(lot['rate_name'], False):
-                    number_of_stages[stage_name][lot['rate_name']] = 1
-                else:
-                    number_of_stages[stage_name][lot['rate_name']] += 1
+    workbook.save(filename=f"{service_code} {segment_name} {sub_segment_name}.xlsm")
 
     print(123)
-    # print(sheet['B18'].value)
 
 
 def is_duplicate(lot, lot2) -> bool:
