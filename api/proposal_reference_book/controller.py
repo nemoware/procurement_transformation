@@ -1,10 +1,11 @@
 import logging
 
 import jsonschema
-from flask import Blueprint, request
+from flask import Blueprint, request, jsonify
 
 from api.common import validate_schema
 from api.proposal_reference_book import schemas
+from api.proposal_reference_book.generator import generate_prefilled_proposal
 
 logger = logging.getLogger(__name__)
 api = Blueprint('proposal', __name__)
@@ -21,9 +22,17 @@ def get_proposal():
         service_name = request.json['service_name']
         guaranteed_volume = request.json['guaranteed_volume']
 
+        response_data = generate_prefilled_proposal(
+            segment_name=segment,
+            service_code=service_code,
+            sub_segment_name=sub_segment,
+            subject=subject,
+            service_name=service_name,
+            guaranteed_volume=guaranteed_volume
+        )
 
-
-        jsonschema.validate(None, schemas.create_proposal_response)
+        jsonschema.validate(response_data, schemas.create_proposal_response)
+        return jsonify(response_data)
     except jsonschema.exceptions.ValidationError as err:
         logger.exception(err)
     except Exception as e:
