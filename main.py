@@ -4,6 +4,7 @@ import flask
 
 from api.common import env_var
 from api.seeds_ranking.routes import api as seeds_ranking_api
+from api.proposal_reference_book.controller import api as proposal_reference_book_api
 from db import db_init
 
 logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
@@ -19,6 +20,7 @@ def create_app():
     app = flask.Flask(__name__)
     app.config['JSON_AS_ASCII'] = False
     app.register_blueprint(seeds_ranking_api)
+    app.register_blueprint(proposal_reference_book_api)
     app.register_error_handler(Exception, default_error_handler)
     return app
 

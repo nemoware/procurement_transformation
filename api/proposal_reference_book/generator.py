@@ -13,10 +13,10 @@ from db.entity.simple_entity import Segment, Sub_segment, Service, Unit
 
 def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, service_code=None, service_name=None,
                                 subject=None, guaranteed_volume=None):
-    segment_name = 'Корпоратив защита и защита информации'
-    sub_segment_name = '-'
-    service_code = '90303'
-    service_name = 'Услуги по охране объектов и (или) имущества (в том числе при его транспортировке)'
+    # segment_name = 'Корпоратив защита и защита информации'
+    # sub_segment_name = '-'
+    # service_code = '90303'
+    # service_name = 'Услуги по охране объектов и (или) имущества (в том числе при его транспортировке)'
 
     list_of_stage_ids = []
     list_of_rate_ids = []
