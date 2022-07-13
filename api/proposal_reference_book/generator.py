@@ -6,7 +6,7 @@ from openpyxl import load_workbook, Workbook
 from peewee import fn, SQL
 
 from db.entity.lot import Lot
-from db.entity.simple_entity import Segment, Sub_segment, Service, Unit
+from db.entity.simple_entity import Segment, Sub_segment, Service, Unit, Rate, Stage
 
 
 def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, service_code=None, service_name=None,
@@ -19,13 +19,14 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
     list_of_stage_ids = []
     list_of_rate_ids = []
 
-    current_stage_ids = (Lot.select(Lot.stage_id, fn.COUNT(Lot.stage_id).alias('num_stage_id'))
+    current_stage_ids = (Lot.select(Lot.stage_id, Stage.id, fn.COUNT(Lot.stage_id).alias('num_stage_id'))
                          .join(Segment).switch(Lot)
                          .join(Sub_segment).switch(Lot)
                          .join(Service).switch(Lot)
+                         .join(Stage)
                          .where(Segment.name == segment_name, Sub_segment.name == sub_segment_name,
                                 Service.code == service_code)
-                         .group_by(Lot.stage_id)
+                         .group_by(Lot.stage_id, Stage.id)
                          .order_by(SQL('num_stage_id').desc()))
 
     for lot in current_stage_ids:
@@ -36,15 +37,16 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
 
     list_of_stage_ids = list_of_stage_ids[:5]
 
-    current_rate_ids = (Lot.select(Lot.rate_id, fn.COUNT(Lot.stage_id).alias('num_rate_id'))
+    current_rate_ids = (Lot.select(Lot.rate_id, Rate.id, fn.COUNT(Lot.stage_id).alias('num_rate_id'))
                         .join(Segment).switch(Lot)
                         .join(Sub_segment).switch(Lot)
                         .join(Service).switch(Lot)
+                        .join(Rate)
                         .where((Segment.name == segment_name) &
                                (Sub_segment.name == sub_segment_name) &
                                (Service.code == service_code) &
                                (Lot.stage_id << list(map(lambda x: x['stage_id'], list_of_stage_ids))))
-                        .group_by(Lot.rate_id)
+                        .group_by(Lot.rate_id, Rate.id)
                         .order_by(SQL('num_rate_id').desc()))
 
     for lot in current_rate_ids:
@@ -54,10 +56,21 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
         })
     list_of_rate_ids = list_of_rate_ids[:10]
 
-    current_lots = (Lot.select(Lot)
+    current_lots = (Lot.select(Lot,
+                               Segment.name,
+                               Sub_segment.name,
+                               Service.code,
+                               Stage.name,
+                               Stage.id,
+                               Rate.name,
+                               Rate.id,
+                               Unit.name,
+                               Unit.id)
                     .join(Segment).switch(Lot)
                     .join(Sub_segment).switch(Lot)
                     .join(Service).switch(Lot)
+                    .join(Stage).switch(Lot)
+                    .join(Rate).switch(Lot)
                     .join(Unit)
                     .where((Segment.name == segment_name) &
                            (Sub_segment.name == sub_segment_name) &
@@ -87,10 +100,18 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
         })
     del current_lots
 
-    current_lots = (Lot.select(Lot)
+    current_lots = (Lot.select(Lot,
+                               Segment.name,
+                               Sub_segment.name,
+                               Service,
+                               Stage,
+                               Rate,
+                               Unit)
                     .join(Segment).switch(Lot)
                     .join(Sub_segment).switch(Lot)
                     .join(Service).switch(Lot)
+                    .join(Stage).switch(Lot)
+                    .join(Rate).switch(Lot)
                     .join(Unit)
                     .where((Segment.name == segment_name) &
                            (Sub_segment.name == sub_segment_name) &
