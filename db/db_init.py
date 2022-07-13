@@ -12,6 +12,7 @@ from tqdm import tqdm
 from db.generator import generate_
 logger = logging.getLogger(__name__)
 
+
 def create_table() -> bool:
     try:
         db_handle.connect()

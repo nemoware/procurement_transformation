@@ -1,7 +1,9 @@
 import json
 import logging
 from datetime import datetime
+from threading import Lock
 
+from peewee import Database
 from scipy import spatial
 from sklearn.metrics.pairwise import cosine_similarity
 import tensorflow_hub as hub
@@ -10,6 +12,7 @@ import tensorflow_text
 import pandas as pd
 import spacy
 from spacy import Vocab
+import tensorflow as tf
 
 from spacy.symbols import NOUN, PROPN, PRON, ADP, ADJ, PUNCT, PART, VERB, CONJ, CCONJ, SCONJ, SYM, X
 import string
@@ -19,9 +22,13 @@ from nltk.stem.snowball import SnowballStemmer
 import re
 
 from api.seeds_ranking.asuz.integration import get_procurements
+from db.config import db_handle
+from db.entity.historical_lot import HistoricalLot
 
 exclude_pos = [ADP, CONJ, CCONJ, PUNCT, SCONJ, SYM]
 logger = logging.getLogger(__name__)
+historical_lot_cache = {}
+lock = Lock()
 
 
 def noun_chunks(obj):
@@ -300,20 +307,52 @@ def filter_condition(lot: [dict], start_date: datetime, end_date: datetime, serv
     return True
 
 
-def filter_by_similarity(input_str: str, lots: [dict], field_name: str, similarity_threshold=-1) -> [dict]:
+def filter_by_similarity(input_str: str, lots: [dict], similarity_threshold=-1) -> [dict]:
     input_embedding = embed(input_str)
     result = []
     for lot in lots:
-        embedding = embed(lot[field_name])
-        similarity = 1 - spatial.distance.cosine(embedding, input_embedding)
+        if lot.get('embedding') is None:
+            embedding = embed(lot['name_objects'])
+        else:
+            embedding = lot['embedding']
+        similarity = 1 - spatial.distance.cosine(embedding, input_embedding) / 2
         if similarity > similarity_threshold:
             lot['similarity'] = similarity
             result.append(lot)
     return sorted(result, key=lambda elem: elem['similarity'], reverse=True)
 
 
+def update_asuz_data_cache(lots):
+    if len(historical_lot_cache) == 0:
+        db_lots = HistoricalLot.select()
+        for historical_lot in db_lots.dicts().iterator():
+            key = historical_lot['konkurs_id'] + '_' + historical_lot['ofr_id']
+            historical_lot['embedding'] = tf.convert_to_tensor(np.frombuffer(historical_lot['embedding'], dtype=np.single))
+            historical_lot_cache[key] = historical_lot
+
+    for lot in lots:
+        key = lot['konkurs_id'] + '_' + lot['ofr_id']
+        if historical_lot_cache.get(key) is None:
+            embedding = embed(lot['lot_name'])
+            lot['embedding'] = embedding.numpy().tobytes()
+            if lot.get('purchase_date', '') == '':
+                lot['purchase_date'] = None
+            HistoricalLot.create(**lot)
+            lot['embedding'] = embedding
+            historical_lot_cache[key] = lot
+        else:
+            lot['embedding'] = historical_lot_cache[key]['embedding']
+    return lots
+
+
 def filter_asuz_data(request_json):
     lots = get_procurements()
+    try:
+        lock.acquire()
+        lots = update_asuz_data_cache(lots)
+    finally:
+        lock.release()
+
     search_request = request_json.get('search_request')
     start_date = request_json.get('start_pur_date')
     if start_date is not None:
@@ -324,7 +363,7 @@ def filter_asuz_data(request_json):
     service_code = request_json.get('usl_code')
     service_name = request_json.get('usl_name')
     lots = [lot for lot in lots if filter_condition(lot, start_date, end_date, service_code, service_name)]
-    lots = filter_by_similarity(search_request, lots, 'lot_name')
+    lots = filter_by_similarity(search_request, lots)
     result = []
     for lot in lots:
         elem = {

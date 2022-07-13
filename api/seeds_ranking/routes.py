@@ -35,7 +35,7 @@ def find_lots():
 @validate_schema(schemas.calculate_similarity)
 def calculate_similarity():
     try:
-        subjects = filter_by_similarity(request.json['name_subject'], request.json['search_results'], 'name_objects')
+        subjects = filter_by_similarity(request.json['name_subject'], request.json['search_results'])
         for subject in subjects:
             subject.pop('name_objects', None)
         return jsonify(subjects)
