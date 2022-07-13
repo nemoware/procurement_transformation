@@ -1,4 +1,5 @@
 import base64
+from datetime import datetime
 from copy import copy
 from openpyxl.writer.excel import save_virtual_workbook
 from openpyxl import load_workbook, Workbook
@@ -215,6 +216,11 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
     list_without_duplicates_of_lots.sort(key=lambda x: (
         number_of_all_stages[x['stage_name']]['count']
     ), reverse=True)
+
+    list_without_duplicates_of_lots = list(filter(
+        lambda x:
+        x['unit_name'] == find_max_number_of_units(x, number_of_all_stages),
+        list_without_duplicates_of_lots))
     prev_stage_name = None
     start_index = 0
     end_index = 0
@@ -291,12 +297,11 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
         ws.append(list(lot.values()))
 
     virtual_workbook = save_virtual_workbook(workbook)
-
     this_is_base64 = base64.b64encode(virtual_workbook).decode('UTF-8')
 
     return {
         'proposal_file': this_is_base64,
-        'name': f"{service_code} {segment_name} {sub_segment_name}.xlsm",
+        'name': f"КП {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.xlsm",
         'size': int((len(this_is_base64) * 3) / 4)
     }
 
@@ -317,3 +322,14 @@ def copy_style(cell, new_cell):
         new_cell.number_format = copy(cell.number_format)
         new_cell.protection = copy(cell.protection)
         new_cell.alignment = copy(cell.alignment)
+
+
+def find_max_number_of_units(lot, number_of_all_stages):
+    current_unit = ''
+    max_number_of_units = 0
+    for unit in number_of_all_stages[lot['stage_name']][lot['rate_name']]:
+        if unit != 'count':
+            if int(number_of_all_stages[lot['stage_name']][lot['rate_name']][unit]['count']) > max_number_of_units:
+                current_unit = unit
+                max_number_of_units = int(number_of_all_stages[lot['stage_name']][lot['rate_name']][unit]['count'])
+    return current_unit
