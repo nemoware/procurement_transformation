@@ -1,9 +1,6 @@
 import base64
 from copy import copy
-import itertools
-import os
-import shutil
-
+from openpyxl.writer.excel import save_virtual_workbook
 from openpyxl import load_workbook, Workbook
 from peewee import fn, SQL
 
@@ -201,9 +198,9 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
             list_without_duplicates_of_all_lots.append(d)
     del seen, d, t, list_of_all_lots
 
-    shutil.copy("Пустой шаблон.xlsm", f"{service_code} {segment_name} {sub_segment_name}.xlsm")
+    # shutil.copy("Пустой шаблон.xlsm", f"{service_code} {segment_name} {sub_segment_name}.xlsm")
 
-    workbook = load_workbook(filename=f"{service_code} {segment_name} {sub_segment_name}.xlsm", read_only=False,
+    workbook = load_workbook(filename=f"Пустой шаблон.xlsm", read_only=False,
                              keep_vba=True)
 
     ws = workbook["Форма КП (для анализа рынка) ВР"]
@@ -293,14 +290,14 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
     for index, lot in enumerate(list_without_duplicates_of_all_lots, start=1):
         ws.append(list(lot.values()))
 
-    workbook.save(filename=f"{service_code} {segment_name} {sub_segment_name}.xlsm")
-    data = open(f"{service_code} {segment_name} {sub_segment_name}.xlsm", 'rb').read()
-    this_is_base64 = base64.b64encode(data).decode('UTF-8')
+    virtual_workbook = save_virtual_workbook(workbook)
+
+    this_is_base64 = base64.b64encode(virtual_workbook).decode('UTF-8')
 
     return {
         'proposal_file': this_is_base64,
         'name': f"{service_code} {segment_name} {sub_segment_name}.xlsm",
-        'size': os.path.getsize(f"{service_code} {segment_name} {sub_segment_name}.xlsm")
+        'size': int((len(this_is_base64) * 3) / 4)
     }
 
 

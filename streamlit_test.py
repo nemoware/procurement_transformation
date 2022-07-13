@@ -20,6 +20,7 @@ def send_request(segment_name=None, sub_segment_name=None, service_code=None, se
     }
     try:
         # "http://127.0.0.1:5001/api/create_proposal"
+        # "http://192.168.10.37:8517/api/create_proposal"
         response = requests.post(
             "http://127.0.0.1:5001/api/create_proposal",
             headers=headers,
@@ -33,8 +34,6 @@ def send_request(segment_name=None, sub_segment_name=None, service_code=None, se
             }
         )
         response_json = response.json()
-        # print(response_json)
-        # data = response_json['status']
         return response_json
     except JSONDecodeError:
         print('Decoding JSON has failed')
@@ -51,9 +50,9 @@ def get_download_link():
                         st.session_state['service_name'],
                         st.session_state['subject'],
                         st.session_state['guaranteed_volume'])
-
-    # b64 = base64.b64decode(data['proposal_file'])
-    return f'<a href="data:file/csv;base64,{data["proposal_file"]}" download="{data["name"]}.xlsm">Download csv file</a>'  # decode b'abc' => abc
+    if data.get('message'):
+        return data.get('message'), False
+    return f'<a href="data:file/csv;base64,{data["proposal_file"]}" download="{data["name"]}.xlsm">Download csv file</a>', True
 
 
 for key in ['subject', 'segment', 'sub_segment', 'service_code', 'service_name', 'guaranteed_volume']:
@@ -77,4 +76,8 @@ st.session_state['guaranteed_volume'] = st.text_input('Признак налич
 btn = st.button("Отправить запрос")
 
 if btn:
-    st.markdown(get_download_link(), unsafe_allow_html=True)
+    link, has_error = get_download_link()
+    if has_error is False:
+        st.write(link)
+    else:
+        st.markdown(link, unsafe_allow_html=True)
