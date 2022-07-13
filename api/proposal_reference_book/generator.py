@@ -1,6 +1,9 @@
 import base64
 from datetime import datetime
 from copy import copy
+
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, numbers
+from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.writer.excel import save_virtual_workbook
 from openpyxl import load_workbook, Workbook
 from peewee import fn, SQL
@@ -279,7 +282,7 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
     workbook = load_workbook(filename=f"Пустой шаблон.xlsm", read_only=False,
                              keep_vba=True)
 
-    ws = workbook["Форма КП (для анализа рынка) ВР"]
+    ws: Worksheet = workbook["Форма КП (для анализа рынка) ВР"]
     index_of_number = 1
     ws['C6'] = subject
     ws['C8'] = segment_name
@@ -306,6 +309,16 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
                 f'=SUM(H{start_index}:H{end_index})',
             ])
             ws.merge_cells(start_row=end_index + 1, start_column=2, end_row=end_index + 1, end_column=4)
+            ws.row_dimensions[end_index + 1].height = 23.25
+            for ind, cell in enumerate(ws[end_index + 1]):
+                cell.border = Border(left=Side(style='medium'),
+                                     right=Side(style='medium'),
+                                     top=Side(style='medium'),
+                                     bottom=Side(style='medium'))
+                cell.alignment = Alignment(vertical='center')
+                if ind in [5, 6, 7]:
+                    cell.number_format = numbers.FORMAT_NUMBER_00
+                    cell.alignment = Alignment(vertical='center', horizontal='center')
             shift_index += 1
             start_index = index + shift_index
             end_index = index + shift_index
@@ -318,6 +331,26 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
         lot.insert(3, 'Заполняется при необходимости. См. пояснения п.3.')
         lot.extend([0, 0, 0])
         ws.append(lot)
+        for row in range(start_index, end_index + 1):
+            for ind, cell in enumerate(ws[row]):
+                cell.font = Font(name='Arial', size=10)
+                if ind == 1:
+                    cell.fill = PatternFill(fgColor="B7DEE8", fill_type="solid")
+                if ind in [2, 3]:
+                    if ind == 3:
+                        cell.font = Font(name='Arial', size=10, color="595959", italic=True)
+                    cell.alignment = Alignment(vertical='center', wrapText=True)
+                else:
+                    cell.alignment = Alignment(vertical='center',
+                                               horizontal='center',
+                                               wrapText=True)
+                if ind in [5, 6, 7]:
+                    cell.number_format = numbers.FORMAT_NUMBER_00
+                cell.border = Border(left=Side(style='medium'),
+                                     right=Side(style='medium'),
+                                     top=Side(style='medium'),
+                                     bottom=Side(style='medium'))
+            ws.row_dimensions[row].height = 62.25
         index_of_number += 1
 
     ws.merge_cells(start_row=start_index, start_column=2, end_row=end_index, end_column=2)
@@ -327,14 +360,40 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
         f'=SUM(G{start_index}:G{end_index})',
         f'=SUM(H{start_index}:H{end_index})',
     ])
+    index_of_number += 1
     ws.merge_cells(start_row=end_index + 1, start_column=2, end_row=end_index + 1, end_column=4)
-
+    ws.row_dimensions[end_index + 1].height = 23.25
+    for ind, cell in enumerate(ws[end_index + 1]):
+        cell.border = Border(left=Side(style='medium'),
+                             right=Side(style='medium'),
+                             top=Side(style='medium'),
+                             bottom=Side(style='medium'))
+        cell.alignment = Alignment(vertical='center')
+        if ind in [5, 6, 7]:
+            cell.number_format = numbers.FORMAT_NUMBER_00
+            cell.alignment = Alignment(vertical='center', horizontal='center')
     ws2 = workbook['footer']
+
+    if any(item for item in list_without_duplicates_of_lots if
+           item['unit_name'] in ['Ч/Д', 'Ч/Ч', 'Ч/М', 'Ч/С', 'ЧЕЛ']):
+        end_index += 1
+        for column_index in range(1, 9):
+            cell = ws2.cell(row=19, column=column_index)
+            new_cell = ws.cell(row=end_index + 1, column=column_index)
+            if column_index == 1:
+                new_cell.value = copy(index_of_number)
+            else:
+                new_cell.value = copy(cell.value)
+            copy_style(cell, new_cell)
+        ws.merge_cells(start_row=end_index + 1,
+                       start_column=2,
+                       end_row=end_index + 1,
+                       end_column=3)
+        ws.row_dimensions[end_index + 1].height = 68.25
 
     for row_index in range(1, 16):
         for column_index in range(1, 9):
             cell = ws2.cell(row=row_index, column=column_index)
-            print(f'row {row_index} column {column_index}')
             new_cell = ws.cell(row=row_index + 1 + end_index, column=column_index)
             new_cell.value = copy(cell.value)
             copy_style(cell, new_cell)
@@ -347,16 +406,21 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
                        start_column=2,
                        end_row=end_index + ind,
                        end_column=3)
+        ws.row_dimensions[end_index + ind].height = 30
 
     ws.merge_cells(start_row=end_index + 6,
                    start_column=1,
                    end_row=end_index + 7,
                    end_column=8)
+    ws.row_dimensions[end_index + 6].height = 72
+    ws.row_dimensions[end_index + 7].height = 70.50
+
     for ind in [10, 13, 16]:
         ws.merge_cells(start_row=end_index + ind,
                        start_column=3,
                        end_row=end_index + ind,
                        end_column=5)
+        ws.row_dimensions[end_index + ind].height = 21.75
 
     ws = workbook["Справочник"]
     for index, lot in enumerate(list_without_duplicates_of_all_lots, start=1):
