@@ -118,8 +118,7 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
                     .join(Unit)
                     .where((Segment.name == segment_name) &
                            (Sub_segment.name == sub_segment_name) &
-                           (Service.code == service_code) &
-                           (Lot.procurement_id != '0')))
+                           (Service.code == service_code)))
 
     list_of_all_lots = []
     for lot in current_lots:
@@ -142,17 +141,23 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
             'rate_id': lot.rate_id.id,
             'unit_id': lot.unit_id.id,
             'id': lot.procurement_id,
+            'is_null': lot.is_null
         })
     del current_lots
 
     number_of_all_stages = {}
-    list_if_ids = list(sorted(set(map(lambda x: x['id'], list_of_all_lots)), key=lambda x: int(x[3:])))
-    number_of_ids = len(list_if_ids)
+    list_if_ids = list(
+        sorted(set(map(lambda x: x['id'], list_of_all_lots)), key=lambda x: int(x[3:]) if x != '0' else 0))
+    number_of_ids = len(list_if_ids) if '0' not in list_if_ids else len(list_if_ids) - 1
     list_of_stage_name = []
 
     for id in list_if_ids:
         lots = [single_lot for single_lot in list_of_all_lots if single_lot['id'] == id]
         for lot in lots:
+            increase_number = 1
+            if lot['is_null']:
+                increase_number = 0
+
             stage_name = lot['stage_name']
             rate_name = lot['rate_name']
             unit_name = lot['unit_name']
@@ -160,15 +165,15 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
                 'count': 0
             })
             if stage_name not in list_of_stage_name:
-                number_of_all_stages[stage_name]['count'] += 1
+                number_of_all_stages[stage_name]['count'] += increase_number
                 list_of_stage_name.append(stage_name)
 
             number_of_all_stages[stage_name].setdefault(rate_name, {
                 'count': 0
-            })['count'] += 1
+            })['count'] += increase_number
             number_of_all_stages[stage_name][rate_name].setdefault(unit_name, {
                 'count': 0
-            })['count'] += 1
+            })['count'] += increase_number
         list_of_stage_name = []
 
     del list_if_ids, lots, stage_name, rate_name, unit_name, id
@@ -177,7 +182,11 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
         lot['number_of_service'] = number_of_ids
         lot['number_of_stages'] = number_of_all_stages[lot['stage_name']]['count']
         lot['number_of_rates'] = number_of_all_stages[lot['stage_name']][lot['rate_name']]['count']
-        lot['number_of_units'] = number_of_all_stages[lot['stage_name']][lot['rate_name']][lot['unit_name']]['count']
+        if lot['is_null']:
+            lot['number_of_units'] = 0
+        else:
+            lot['number_of_units'] = number_of_all_stages[lot['stage_name']][lot['rate_name']][lot['unit_name']][
+                'count']
 
     list_of_lots = list(filter(lambda x: x['id'] != '0', list_of_lots))
     list_of_lots.sort(
@@ -206,7 +215,8 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
         key=lambda x: (
             number_of_all_stages[x['stage_name']]['count'],
             number_of_all_stages[x['stage_name']][x['rate_name']]['count'],
-            number_of_all_stages[x['stage_name']][x['rate_name']][x['unit_name']]['count']
+            number_of_all_stages[x['stage_name']][x['rate_name']][x['unit_name']]['count'] if
+            not x['is_null'] else 0
         ), reverse=True
     )
 
@@ -223,10 +233,10 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
             list_without_duplicates_of_all_lots.append(d)
     del seen, d, t, list_of_all_lots
 
-    list_without_duplicates_of_lots.sort(key=lambda x: x['stage_name'])
-    list_without_duplicates_of_lots.sort(key=lambda x: (
-        number_of_all_stages[x['stage_name']]['count']
-    ), reverse=True)
+    # list_without_duplicates_of_lots.sort(key=lambda x: x['stage_name'])
+    # list_without_duplicates_of_lots.sort(key=lambda x: (
+    #     number_of_all_stages[x['stage_name']]['count']
+    # ), reverse=True)
 
     list_without_duplicates_of_lots = list(filter(
         lambda x:
@@ -425,6 +435,7 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
     ws = workbook["Справочник"]
     for index, lot in enumerate(list_without_duplicates_of_all_lots, start=1):
         ws.append(list(lot.values()))
+    workbook.active = workbook['Форма КП (для анализа рынка) ВР']
     virtual_workbook = save_virtual_workbook(workbook)
     this_is_base64 = base64.b64encode(virtual_workbook).decode('UTF-8')
 
