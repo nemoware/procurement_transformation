@@ -1,11 +1,13 @@
 import base64
-from datetime import datetime
+import logging
 from copy import copy
+from datetime import datetime
 
+from flask import abort
+from openpyxl import load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, numbers
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.writer.excel import save_virtual_workbook
-from openpyxl import load_workbook, Workbook
 from peewee import fn, SQL
 
 from api.common import env_var
@@ -14,6 +16,7 @@ from db.entity.simple_entity import Segment, Sub_segment, Service, Unit, Rate, S
 
 max_number_of_stages = env_var('MAX_NUMBER_OF_STAGES', 20)
 max_number_of_rates = env_var('MAX_NUMBER_OF_RATES', 10)
+logger = logging.getLogger(__name__)
 
 
 def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, service_code=None, service_name=None,
@@ -88,7 +91,9 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
 
     list_of_lots = []
     if len(list_of_stage_ids) == 0 or len(list_of_rate_ids) == 0:
-        raise ValueError('По данному запросу не были найдены этапы или расценки')
+        msg = 'По данному запросу не были найдены этапы или расценки'
+        logger.error(msg)
+        abort(400, msg)
 
     del list_of_stage_ids, list_of_rate_ids, current_rate_ids, current_stage_ids
 
