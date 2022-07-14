@@ -52,7 +52,7 @@ def get_download_link():
                         st.session_state['guaranteed_volume'])
     if data.get('message'):
         return data.get('message'), False
-    return f'<a href="data:file/csv;base64,{data["proposal_file"]}" download="{data["name"]}.xlsm">Download csv file</a>', True
+    return f'<a href="data:file/xlsm;base64,{data["proposal_file"]}" download="{data["name"]}">Download xlsm file</a>', True
 
 
 for key in ['subject', 'segment', 'sub_segment', 'service_code', 'service_name', 'guaranteed_volume']:
