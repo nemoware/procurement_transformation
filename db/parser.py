@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import pandas as pd
 import peewee
@@ -6,15 +8,23 @@ from db import db_init
 from db.entity.lot import Lot
 from db.entity.simple_entity import *
 
+logger = logging.getLogger(__name__)
+
 
 def parse_reference_book() -> None:
     df = pd.read_excel(open('УПРОЩ. КП ВР (Анализ рынка. Работы-Услуги)_v4_5.xlsm', 'rb'), sheet_name='Справочник')
     list_of_trees = []
+    rate = None
+    segment, service, stage, sub_segment, unit = None, None, None, None, None
+
+    for index, row in tqdm(df.iterrows(), desc="Generate simple tables", total=df.shape[0]):
+        rate, segment, service, stage, sub_segment, unit = get_or_create(row, rate, segment, service, stage,
+                                                                         sub_segment, unit)
+
     for index, row in tqdm(df.iterrows(), desc="Generate lots", total=df.shape[0]):
-        rate, segment, service, stage, sub_segment, unit, = get_or_create(row)
+        rate, segment, service, stage, sub_segment, unit = get_or_create(row, rate, segment, service, stage,
+                                                                         sub_segment, unit)
         number_of_services, number_of_stages, number_of_rates, number_of_units = get_number_of(row)
-        # if service[0].code == '90303':
-        #     print(123)
         if number_of_units is not None and not np.isnan(number_of_units):
             if number_of_units == 0:
                 Lot.get_or_create(
@@ -29,8 +39,6 @@ def parse_reference_book() -> None:
                     is_from_excel=True
                 )
                 continue
-            # if sub_segment[0].name == 'IT':
-            #     print(123)
             tree_of_lots = next((
                 item for item in list_of_trees if item["segment_name"] == segment[0].name and
                                                   item["sub_segment_name"] == sub_segment[0].name and
@@ -118,6 +126,8 @@ def parse_reference_book() -> None:
                     break
 
     for tree in tqdm(list_of_trees, desc="Save lots"):
+        if tree["service_code"] == '90303':
+            logger.debug(123)
         for procurement in tree['procurements']:
             for stage in procurement['stages']:
                 for rate_key in procurement['stages'][stage]['rates']:
@@ -133,19 +143,31 @@ def parse_reference_book() -> None:
                                            'unit_id'],
                                        is_from_excel=True)
                         except Exception as e:
-                            print(f'{tree["segment_name"]} {tree["sub_segment_name"]} {tree["service_code"]} '
-                                  f'{stage["procurement_id"]} {stage["stage_name"]} {rate_key} {unit_key}')
-                            print(e)
-    print('rate')
+                            logger.exception(
+                                f'{tree["segment_name"]} {tree["sub_segment_name"]} {tree["service_code"]} '
+                                f'{stage["procurement_id"]} {stage["stage_name"]} {rate_key} {unit_key}')
+                            logger.exception(e)
 
 
-def get_or_create(row):
-    segment = Segment.get_or_create(name=row['Сегмент'])
-    sub_segment = Sub_segment.get_or_create(name=row['Подсегмент'])
-    service = Service.get_or_create(code=row['Код услуги '], name=row['Наименование услуги'])
-    stage = Stage.get_or_create(name=row['Наименование этапов/подэтапов услуг/работ'])
-    rate = Rate.get_or_create(name=row['Наименование расценок'])
-    unit = Unit.get_or_create(name=row['Наименование ЕИ'])
+def get_or_create(row, rate, segment, service, stage, sub_segment, unit):
+    if rate is None or rate[0].name != row['Наименование расценок']:
+        rate = Rate.get_or_create(name=row['Наименование расценок'])
+
+    if segment is None or segment[0].name != row['Сегмент']:
+        segment = Segment.get_or_create(name=row['Сегмент'])
+
+    if service is None or service[0].name != row['Наименование услуги'] and service[0].code != row['Код услуги ']:
+        service = Service.get_or_create(code=row['Код услуги '], name=row['Наименование услуги'])
+
+    if stage is None or stage[0].name != row['Наименование этапов/подэтапов услуг/работ']:
+        stage = Stage.get_or_create(name=row['Наименование этапов/подэтапов услуг/работ'])
+
+    if sub_segment is None or sub_segment[0].name != row['Подсегмент']:
+        sub_segment = Sub_segment.get_or_create(name=row['Подсегмент'])
+
+    if unit is None or unit[0].name != row['Наименование ЕИ']:
+        unit = Unit.get_or_create(name=row['Наименование ЕИ'])
+
     return rate, segment, service, stage, sub_segment, unit
 
 
@@ -161,4 +183,4 @@ if __name__ == "__main__":
     if db_init.create_table():
         parse_reference_book()
     else:
-        print('Can`t create tables')
+        logger.error('Can`t create tables')
