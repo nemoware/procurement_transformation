@@ -8,8 +8,12 @@ from openpyxl.writer.excel import save_virtual_workbook
 from openpyxl import load_workbook, Workbook
 from peewee import fn, SQL
 
+from api.common import env_var
 from db.entity.lot import Lot
 from db.entity.simple_entity import Segment, Sub_segment, Service, Unit, Rate, Stage
+
+max_number_of_stages = env_var('MAX_NUMBER_OF_STAGES', 20)
+max_number_of_rates = env_var('MAX_NUMBER_OF_RATES', 10)
 
 
 def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, service_code=None, service_name=None,
@@ -38,7 +42,7 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
             'num_stage_id': lot.num_stage_id
         })
 
-    list_of_stage_ids = list_of_stage_ids[:5]
+    list_of_stage_ids = list_of_stage_ids[:max_number_of_stages]
 
     current_rate_ids = (Lot.select(Lot.rate_id, Rate.id, fn.COUNT(Lot.stage_id).alias('num_rate_id'))
                         .join(Segment).switch(Lot)
@@ -57,7 +61,7 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
             'rate_id': lot.rate_id.id,
             'num_rate_id': lot.num_rate_id
         })
-    list_of_rate_ids = list_of_rate_ids[:10]
+    list_of_rate_ids = list_of_rate_ids[:max_number_of_rates]
 
     current_lots = (Lot.select(Lot,
                                Segment.name,
