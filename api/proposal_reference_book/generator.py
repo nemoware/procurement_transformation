@@ -179,7 +179,13 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
 
             number_of_all_stages[stage_name].setdefault(rate_name, {
                 'count': 0
-            })['count'] += increase_number
+            })
+            number_of_all_stages[stage_name][rate_name]['count'] = len(set([
+                single_lot['id'] for single_lot in list_of_all_lots
+                if single_lot['stage_name'] == stage_name and
+                   single_lot['rate_name'] == rate_name and
+                   single_lot['is_null'] is None
+            ]))
             number_of_all_stages[stage_name][rate_name].setdefault(unit_name, {
                 'count': 0
             })['count'] += increase_number
