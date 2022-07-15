@@ -1,16 +1,13 @@
 import base64
-import json
+from json import JSONDecodeError
 
 import requests
 import streamlit as st
-from json import JSONDecodeError
 
 api = 'http://127.0.0.1:5001/api/create_proposal'
 st.set_page_config(layout="wide")
 container = st.container
 
-
-# container.file_uploader("Выберите файл", ["doc", "docx"])
 
 def send_request(segment_name=None, sub_segment_name=None, service_code=None, service_name=None,
                  subject=None, guaranteed_volume=None):
@@ -31,6 +28,32 @@ def send_request(segment_name=None, sub_segment_name=None, service_code=None, se
                 'service_name': service_name,
                 'subject': subject,
                 'guaranteed_volume': False if guaranteed_volume == 'False' else True
+            }
+        )
+        response_json = response.json()
+        return response_json
+    except JSONDecodeError:
+        print('Decoding JSON has failed')
+        return False
+    except requests.exceptions.RequestException:
+        print("Ошибка при запросе")
+        return False
+
+
+def send_request_for_compare_proposal(excel_in_base64, procurement_id):
+    headers = {
+        'Content-type': 'application/json',
+        'Accept': 'application/json; text/plain'
+    }
+    try:
+        # "http://127.0.0.1:5001/api/create_proposal"
+        # "http://192.168.10.37:8517/api/create_proposal"
+        response = requests.post(
+            "http://127.0.0.1:5001/api/compare_proposal_from_initiator",
+            headers=headers,
+            json={
+                'proposal_file': excel_in_base64,
+                'procurement_id': procurement_id,
             }
         )
         response_json = response.json()
@@ -81,3 +104,9 @@ if btn:
         st.write(link)
     else:
         st.markdown(link, unsafe_allow_html=True)
+
+file_uploader = st.file_uploader("Выберите файл", ["xlsm"])
+
+if file_uploader:
+    encode = base64.b64encode(file_uploader.getvalue()).decode('UTF-8')
+    send_request_for_compare_proposal(encode, '0')
