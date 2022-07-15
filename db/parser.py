@@ -16,7 +16,7 @@ def parse_reference_book() -> None:
     list_of_trees = []
     rate = None
     segment, service, stage, sub_segment, unit = None, None, None, None, None
-
+    unique_id = 0
     for index, row in tqdm(df.iterrows(), desc="Generate simple tables", total=df.shape[0]):
         rate, segment, service, stage, sub_segment, unit = get_or_create(row, rate, segment, service, stage,
                                                                          sub_segment, unit)
@@ -58,8 +58,9 @@ def parse_reference_book() -> None:
 
             if not tree_of_lots['procurements']:
                 for ind, id_from_list in enumerate(list(range(1, int(number_of_services) + 1))):
+                    unique_id += 1
                     tree_of_lots['procurements'].append({
-                        'procurement_id': 'арх' + str(id_from_list),
+                        'procurement_id': 'арх' + str(unique_id),
                         'stages': {},
                         'count': number_of_services
                     })
