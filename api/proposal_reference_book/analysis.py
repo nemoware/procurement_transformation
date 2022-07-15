@@ -47,6 +47,10 @@ def compare_proposal(proposal_file, procurement_id):
 
 def excel_validation(wb: Workbook):
     ws: Worksheet = wb['Форма КП (для анализа рынка) ВР']
+
+    for num in [6, 8, 9, 10, 11]:
+        if ws[f'C{num}'].value is None:
+            raise ValueError(f'Ошибка в шапке файла, а именно в ячейке C{num}')
     words = [
         '№ п\п',
         'Наименование этапа / услуги (работы)',
@@ -66,41 +70,45 @@ def excel_validation(wb: Workbook):
 
     is_stopped = False
     prev_stage_name = None
-    shift_index = 0
     for index, row in enumerate(ws.iter_rows(min_row=18, max_col=8, values_only=True), start=18):
+        if is_stopped:
+            break
         for ind, cell in enumerate(row, start=1):
+            if ind == 1 and (row[1] == ('Командировочные расходы \n'
+                                        '(При необходимости. Включаются в стоимость КП, '
+                                        'если в ТЗ не заявлено требование об оказании услуг/выполнения работ в '
+                                        'удаленном формате и/или для оказании услуг/выполнения работ требуется '
+                                        'оформление командировки для указанного выше состава исполнителей)') or
+                             row[1] == 'Всего без НДС'):
+                is_stopped = True
+                break
+
             if ind == 1:
-                number_from_cell = 0
-                try:
-                    number_from_cell = int(cell)
-                except Exception as e:
-                    raise ValueError(f'В 1-ом столбец, в строке {index}, указано что-то не похожее на число'
-                                     f'--> {cell} <--')
-                if (index - 17) != number_from_cell:
-                    raise ValueError(f'Не правильно пронумерован 1 столбец в строке {index}, '
-                                     f'должно быть значение {index - 17}, а было найдено {number_from_cell}')
+                if cell != f'=ROW(A{index})-17':
+                    raise ValueError(f'Не правильно указана формула в 1 столбец, в строке {index}, '
+                                     f'должно быть значение =ROW(A{index})-17, а было найдено {cell}')
             if ind == 2:
                 if cell == 'Итого:':
+                    prev_stage_name = None
                     break
                 if prev_stage_name is None:
                     if type(cell) is not str and len(cell) == 0:
                         raise ValueError(f'Не был указан этап в строке {index}')
                     prev_stage_name = cell
-            if cell == 'Итого:':
-                prev_stage_name = None
-                shift_index += 1
-            if ind == 3 and type(cell) is not str and len(cell) == 0:
+
+            if ind == 3 and (type(cell) is not str or cell is None or len(cell) == 0):
                 raise ValueError(f'Не правильно указан этап в строке {index}')
-            if ind == 5 and type(cell) is not str and len(cell) == 0:
+
+            if ind == 5 and (type(cell) is not str or cell is None or len(cell) == 0):
                 raise ValueError(f'Не правильно указана расценка в строке {index}')
-            if (ind == 6 or ind == 7) and (type(cell) is not int and type(cell) is not float) and cell <= 0:
+
+            if (ind == 6 or ind == 7) and ((type(cell) is not int and type(cell) is not float) or cell < 0):
                 raise ValueError(
                     f'Не правильно указано значение в {"Кол-во ЕИ" if ind == 6 else "Стоимость ЕИ в валюте Участника"},'
                     f'в строке {index}')
-            if ind == 8 and cell != f'=F{index + shift_index}*G{index + shift_index}':
+
+            if ind == 8 and cell != f'=F{index}*G{index}':
                 raise ValueError(
                     f'Ошибка в формуле в столбец \"ИТОГО в валюте Участника\", '
-                    f'в строке {index + shift_index}')
-            print(cell)
-        print(index)
+                    f'в строке {index}')
     return True
