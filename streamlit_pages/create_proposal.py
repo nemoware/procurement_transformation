@@ -51,16 +51,14 @@ def get_download_link():
     return f'<a href="data:file/xlsm;base64,{data["proposal_file"]}" download="{data["name"]}">Download xlsm file</a>', True
 
 
-for key in ['subject', 'segment', 'sub_segment', 'service_code', 'service_name', 'guaranteed_volume', 'is_saved']:
-    if key not in st.session_state:
-        if key == 'is_saved':
-            st.session_state[key] = False
-        else:
-            st.session_state[key] = ""
-
-
 def run():
-    if st.session_state['is_saved'] is not True:
+    for key in ['subject', 'segment', 'sub_segment', 'service_code', 'service_name', 'guaranteed_volume', 'is_saved']:
+        if key not in st.session_state:
+            if key == 'is_saved':
+                st.session_state[key] = False
+            else:
+                st.session_state[key] = ""
+    if st.session_state['is_saved'] is False:
         st.session_state['subject'] = 'Где деньги,Лебовски?'
         st.session_state['segment'] = 'Корпоратив защита и защита информации'
         st.session_state['sub_segment'] = '-'
