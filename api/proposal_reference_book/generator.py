@@ -323,7 +323,8 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
         else:
             ws.merge_cells(start_row=start_index, start_column=2, end_row=end_index, end_column=2)
             ws.append([
-                index_of_number, 'Итого:', '', '', '',
+                f'=ROW(A{index + shift_index})-17',
+                'Итого:', '', '', '',
                 f'=SUM(F{start_index}:F{end_index})',
                 f'=SUM(G{start_index}:G{end_index})',
                 f'=SUM(H{start_index}:H{end_index})',
@@ -347,7 +348,7 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
 
         lot = list(lot.values())
         del lot[0:3]
-        lot.insert(0, index_of_number)
+        lot.insert(0, f'=ROW(A{index + shift_index})-17')
         lot.insert(3, 'Заполняется при необходимости. См. пояснения п.3.')
         lot.extend([0, 0, f'=F{index + shift_index}*G{index + shift_index}'])
         ws.append(lot)
@@ -375,7 +376,8 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
 
     ws.merge_cells(start_row=start_index, start_column=2, end_row=end_index, end_column=2)
     ws.append([
-        index_of_number, 'Итого:', '', '', '',
+        f'=ROW(A{end_index + 1})-17',
+        'Итого:', '', '', '',
         f'=SUM(F{start_index}:F{end_index})',
         f'=SUM(G{start_index}:G{end_index})',
         f'=SUM(H{start_index}:H{end_index})',
@@ -401,7 +403,7 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
             cell = ws2.cell(row=19, column=column_index)
             new_cell = ws.cell(row=end_index + 1, column=column_index)
             if column_index == 1:
-                new_cell.value = copy(index_of_number)
+                new_cell.value = f'=ROW(A{end_index + 1})-17'
             else:
                 new_cell.value = copy(cell.value)
             copy_style(cell, new_cell)
