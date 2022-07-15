@@ -21,11 +21,6 @@ logger = logging.getLogger(__name__)
 
 def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, service_code=None, service_name=None,
                                 subject=None, guaranteed_volume=None):
-    # segment_name = 'Корпоратив защита и защита информации'
-    # sub_segment_name = '-'
-    # service_code = '90303'
-    # service_name = 'Услуги по охране объектов и (или) имущества (в том числе при его транспортировке)'
-
     list_of_stage_ids = []
     list_of_rate_ids = []
 
@@ -354,7 +349,7 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
         del lot[0:3]
         lot.insert(0, index_of_number)
         lot.insert(3, 'Заполняется при необходимости. См. пояснения п.3.')
-        lot.extend([0, 0, 0])
+        lot.extend([0, 0, f'=F{index + shift_index}*G{index + shift_index}'])
         ws.append(lot)
         for row in range(start_index, end_index + 1):
             for ind, cell in enumerate(ws[row]):
