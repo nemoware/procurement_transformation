@@ -36,10 +36,15 @@ def send_request_for_compare_proposal(excel_in_base64, procurement_id):
 
 
 def run():
+    for key in ['procurement_id']:
+        if key not in st.session_state:
+            st.session_state[key] = ""
+
     file_uploader = st.file_uploader("Выберите файл", ["xlsm"])
+    st.session_state['procurement_id'] = st.text_input('ИД закупки', st.session_state['procurement_id'])
     btn = st.button("Отправить запрос")
 
     if file_uploader and btn:
         encode = base64.b64encode(file_uploader.getvalue()).decode('UTF-8')
-        response = send_request_for_compare_proposal(encode, '0')
+        response = send_request_for_compare_proposal(encode, st.session_state['procurement_id'])
         st.write(response)

@@ -35,7 +35,8 @@ def get_proposal():
         jsonschema.validate(response_data, schemas.create_proposal_response)
         return jsonify(response_data)
     except jsonschema.exceptions.ValidationError as err:
-        logger.exception(err)
+        logger.exception(err.message)
+        raise Exception(err.message)
     except Exception as e:
         logger.exception(e)
         raise
@@ -52,7 +53,8 @@ def compare_proposal_from_initiator():
         jsonschema.validate(response_data, schemas.compare_proposal_from_initiator_response)
         return jsonify(response_data)
     except jsonschema.exceptions.ValidationError as err:
-        logger.exception(err)
+        logger.exception(err.message, exc_info=False)
+        raise Exception(err.message)
     except Exception as e:
         logger.exception(e)
         raise

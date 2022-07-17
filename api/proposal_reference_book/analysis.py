@@ -9,11 +9,24 @@ from db.entity.simple_entity import Segment, Sub_segment, Service, Unit, Rate, S
 
 
 def compare_proposal(proposal_file, procurement_id):
+    if procurement_id == '0':
+        raise ValueError('Не используйте 0 ИД закупки')
     wb = load_workbook(filename=BytesIO(base64.b64decode(proposal_file)))
     try:
-        excel_validation(wb)
+        end_index_row = excel_validation(wb)
     except ValueError as e:
         raise ValueError(str(e))
+    ws: Worksheet = wb['Форма КП (для анализа рынка) ВР']
+    subject = ws['C6'].value
+    segment_name = ws['C8'].value
+    sub_segment_name = ws['C9'].value
+    service_code = ws['C10'].value
+    service_name = ws['C11'].value
+
+    subject: (object, bool) = ({'name': subject}, True)
+    segment = Segment.get_or_create(name=segment_name)
+    sub_segment = Sub_segment.get_or_create(name=sub_segment_name)
+    service = Service.get_or_create(name=service_name)
 
     current_lots = (Lot.select(Lot, Segment, Sub_segment, Service, Stage, Rate, Unit)
                     .join(Segment).switch(Lot)
@@ -22,15 +35,15 @@ def compare_proposal(proposal_file, procurement_id):
                     .join(Stage).switch(Lot)
                     .join(Rate).switch(Lot)
                     .join(Unit)
-                    .where(Lot.procurement_id == procurement_id))
+                    .where((Lot.procurement_id == procurement_id)))
     list_of_lots_from_db = []
 
     for lot in current_lots:
         list_of_lots_from_db.append({
-            'segment_name': lot.segment_id.name,
-            'sub_segment_name': lot.sub_segment_id.name,
-            'service_code': lot.service_code.code,
-            'service_name': lot.service_code.name,
+            # 'segment_name': lot.segment_id.name,
+            # 'sub_segment_name': lot.sub_segment_id.name,
+            # 'service_code': lot.service_code.code,
+            # 'service_name': lot.service_code.name,
             'stage_name': lot.stage_id.name,
             'rate_name': lot.rate_id.name,
             'unit_name': lot.unit_id.name,
@@ -40,9 +53,71 @@ def compare_proposal(proposal_file, procurement_id):
             'id': lot.procurement_id,
             'is_null': lot.is_null
         })
-    del lot
+    if len(list_of_lots_from_db) == 0:
+        raise ValueError('Найдено 0 лотов по данном ИД закупки')
+    del lot, current_lots
 
-    return {}
+    list_of_lots_from_excel = []
+    prev_stage_name = None
+    for index, row in enumerate(ws.iter_rows(min_row=18, max_col=8, max_row=end_index_row - 1, values_only=True),
+                                start=18):
+        if prev_stage_name is None:
+            prev_stage_name = row[1]
+        if row[1] == 'Итого:':
+            prev_stage_name = None
+            continue
+        list_of_lots_from_excel.append({
+            # 'segment_name': segment_name,
+            # 'sub_segment_name': sub_segment_name,
+            # 'service_code': service_code,
+            # 'service_name': service_name,
+            'stage_name': prev_stage_name,
+            'rate_name': row[2],
+            'unit_name': row[4],
+            'stage_id': 0,
+            'rate_id': 0,
+            'unit_id': 0,
+            'id': procurement_id,
+            'is_null': False
+        })
+
+    response_data = {
+        'fields': [{
+            'label': 'subject',
+            'value': subject[0]['name'],
+            'reference_book': not subject[1]
+        }, {
+            'label': 'segment',
+            'value': segment[0].name,
+            'reference_book': not segment[1]
+        }, {
+            'label': 'sub_segment',
+            'value': sub_segment[0].name,
+            'reference_book': not sub_segment[1]
+        }, {
+            'label': 'service_code',
+            'value': service[0].code,
+            'reference_book': not service[1]
+        }, {
+            'label': 'service_name',
+            'value': service[0].name,
+            'reference_book': not service[1]
+        }],
+        'stages': []
+    }
+    stages = []
+    for index, lot in enumerate(list_of_lots_from_excel):
+        stages.append({
+            'name': lot['stage_name'],
+            'reference_book': any(item for item in list_of_lots_from_db if item['stage_name'] == lot['stage_name'])
+        })
+
+    # for item in [subject, segment, sub_segment]:
+    #     response_data['fields'].append({
+    #         'value': item[0]['name'],
+    #         'reference_book': not item[1]
+    #     })
+    return response_data
 
 
 def excel_validation(wb: Workbook):
@@ -70,6 +145,7 @@ def excel_validation(wb: Workbook):
 
     is_stopped = False
     prev_stage_name = None
+    end_index_row = 0
     for index, row in enumerate(ws.iter_rows(min_row=18, max_col=8, values_only=True), start=18):
         if is_stopped:
             break
@@ -81,6 +157,7 @@ def excel_validation(wb: Workbook):
                                         'оформление командировки для указанного выше состава исполнителей)') or
                              row[1] == 'Всего без НДС'):
                 is_stopped = True
+                end_index_row = index
                 break
 
             if ind == 1:
@@ -111,4 +188,4 @@ def excel_validation(wb: Workbook):
                 raise ValueError(
                     f'Ошибка в формуле в столбец \"ИТОГО в валюте Участника\", '
                     f'в строке {index}')
-    return True
+    return end_index_row
