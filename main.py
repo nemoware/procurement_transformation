@@ -1,6 +1,7 @@
 import logging
 
 import flask
+from flask import jsonify
 
 from api.common import env_var
 from api.seeds_ranking.routes import api as seeds_ranking_api
@@ -16,12 +17,17 @@ def default_error_handler(error):
     return {'message': str(error), 'version': __version__}, getattr(error, 'code', 500)
 
 
+def get_status():
+    return jsonify(dict(message='ok', version=__version__))
+
+
 def create_app():
     app = flask.Flask(__name__)
     app.config['JSON_AS_ASCII'] = False
     app.register_blueprint(seeds_ranking_api)
     app.register_blueprint(proposal_reference_book_api)
     app.register_error_handler(Exception, default_error_handler)
+    app.add_url_rule('/api/status', view_func=get_status, methods=['GET'])
     return app
 
 
