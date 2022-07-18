@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, service_code=None, service_name=None,
                                 subject=None, guaranteed_volume=None):
     list_of_stage_ids = []
-    list_of_rate_ids = []
 
     current_stage_ids = (Lot.select(Lot.stage_id, Stage.id, fn.COUNT(Lot.stage_id).alias('num_stage_id'))
                          .join(Segment).switch(Lot)
@@ -42,24 +41,42 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
 
     list_of_stage_ids = list_of_stage_ids[:max_number_of_stages]
 
-    current_rate_ids = (Lot.select(Lot.rate_id, Rate.id, fn.COUNT(Lot.stage_id).alias('num_rate_id'))
-                        .join(Segment).switch(Lot)
-                        .join(Sub_segment).switch(Lot)
-                        .join(Service).switch(Lot)
-                        .join(Rate)
-                        .where((Segment.name == segment_name) &
-                               (Sub_segment.name == sub_segment_name) &
-                               (Service.code == service_code) &
-                               (Lot.stage_id << list(map(lambda x: x['stage_id'], list_of_stage_ids))))
-                        .group_by(Lot.rate_id, Rate.id)
-                        .order_by(SQL('num_rate_id').desc()))
+    current_rate_ids = (
+        Lot.select(Lot.rate_id, Lot.stage_id, Stage.id, Rate.id, Lot.is_null,
+                   fn.COUNT(Lot.stage_id).alias('num_rate_id'))
+        .join(Segment).switch(Lot)
+        .join(Sub_segment).switch(Lot)
+        .join(Service).switch(Lot)
+        .join(Stage).switch(Lot)
+        .join(Rate)
+        .where((Segment.name == segment_name) &
+               (Sub_segment.name == sub_segment_name) &
+               (Service.code == service_code) &
+               (Lot.stage_id << list(map(lambda x: x['stage_id'], list_of_stage_ids))))
+        .group_by(Lot.rate_id, Rate.id, Lot.stage_id, Stage.id, Lot.is_null)
+        .order_by(SQL('num_rate_id').desc()))
 
+    dict_of_rate_ids = {}
     for lot in current_rate_ids:
-        list_of_rate_ids.append({
+        dict_of_rate_ids.setdefault(lot.stage_id.id, []).append({
             'rate_id': lot.rate_id.id,
-            'num_rate_id': lot.num_rate_id
+            'num_rate_id': lot.num_rate_id,
+            'is_null': lot.is_null
         })
-    list_of_rate_ids = list_of_rate_ids[:max_number_of_rates]
+
+    list_of_rate_ids = []
+    for stage in dict_of_rate_ids:
+        count = 0
+        for rate in dict_of_rate_ids[stage]:
+            if count == max_number_of_rates:
+                break
+            else:
+                list_of_rate_ids.append(rate['rate_id'])
+                if rate['is_null']:
+                    continue
+                count += 1
+
+    list_of_rate_ids = list(set(list_of_rate_ids))
 
     current_lots = (Lot.select(Lot,
                                Segment.name,
@@ -81,7 +98,7 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
                            (Sub_segment.name == sub_segment_name) &
                            (Service.code == service_code) &
                            (Lot.stage_id << list(map(lambda x: x['stage_id'], list_of_stage_ids))) &
-                           (Lot.rate_id << list(map(lambda x: x['rate_id'], list_of_rate_ids))))
+                           (Lot.rate_id << list(map(lambda x: x, list_of_rate_ids))))
                     )
 
     list_of_lots = []
