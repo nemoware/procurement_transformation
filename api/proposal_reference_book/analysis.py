@@ -1,11 +1,16 @@
 import base64
+import logging
 from io import BytesIO
 
+from flask import abort
 from openpyxl import load_workbook, Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from db.config import db_handle
 from db.entity.lot import Lot
 from db.entity.simple_entity import Segment, Sub_segment, Service, Unit, Rate, Stage
+
+logger = logging.getLogger(__name__)
 
 
 def compare_proposal(proposal_file, procurement_id):
@@ -35,15 +40,20 @@ def compare_proposal(proposal_file, procurement_id):
                     .join(Stage).switch(Lot)
                     .join(Rate).switch(Lot)
                     .join(Unit)
-                    .where((Lot.procurement_id == procurement_id)))
+                    .where((Segment.name == segment_name) &
+                           (Sub_segment.name == sub_segment_name) &
+                           (Service.code == service_code)))
+
     list_of_lots_from_db = []
 
     for lot in current_lots:
         list_of_lots_from_db.append({
-            # 'segment_name': lot.segment_id.name,
-            # 'sub_segment_name': lot.sub_segment_id.name,
-            # 'service_code': lot.service_code.code,
-            # 'service_name': lot.service_code.name,
+            'segment_name': lot.segment_id.name,
+            'segment_id': lot.segment_id.id,
+            'sub_segment_name': lot.sub_segment_id.name,
+            'sub_segment_id': lot.sub_segment_id.id,
+            'service_code': lot.service_code.code,
+            'service_name': lot.service_code.name,
             'stage_name': lot.stage_id.name,
             'rate_name': lot.rate_id.name,
             'unit_name': lot.unit_id.name,
@@ -53,8 +63,8 @@ def compare_proposal(proposal_file, procurement_id):
             'id': lot.procurement_id,
             'is_null': lot.is_null
         })
-    if len(list_of_lots_from_db) == 0:
-        raise ValueError('Найдено 0 лотов по данном ИД закупки')
+    list_of_lots_by_id = list(filter(lambda x: x['id'] == procurement_id, list_of_lots_from_db))
+
     del lot, current_lots
 
     list_of_lots_from_excel = []
@@ -67,10 +77,12 @@ def compare_proposal(proposal_file, procurement_id):
             prev_stage_name = None
             continue
         list_of_lots_from_excel.append({
-            # 'segment_name': segment_name,
-            # 'sub_segment_name': sub_segment_name,
-            # 'service_code': service_code,
-            # 'service_name': service_name,
+            'segment_name': segment_name,
+            'segment_id': 0,
+            'sub_segment_name': sub_segment_name,
+            'sub_segment_id': 0,
+            'service_code': service_code,
+            'service_name': service_name,
             'stage_name': prev_stage_name,
             'rate_name': row[2],
             'unit_name': row[4],
@@ -107,16 +119,90 @@ def compare_proposal(proposal_file, procurement_id):
     }
     stages = []
     for index, lot in enumerate(list_of_lots_from_excel):
-        stages.append({
-            'name': lot['stage_name'],
-            'reference_book': any(item for item in list_of_lots_from_db if item['stage_name'] == lot['stage_name'])
-        })
+        stage = next((item for item in stages if item['name'] == lot['stage_name']), None)
+        if stage is None:
+            stage = {
+                'name': lot['stage_name'],
+                'reference_book': any(item for item in list_of_lots_from_db if item['stage_name'] == lot['stage_name']),
+                'rows': []
+            }
+            stages.append(stage)
+        # row = next((item for item in stage['rows'] if item['name'] == lot['']))
+        if stage['reference_book'] is False:
+            stage['rows'].append({
+                'rate': lot['rate_name'],
+                'rate_reference_book': False,
+                'unit': lot['unit_name'],
+                'unit_reference_book': False
+            })
+        else:
+            stage['rows'].append({
+                'rate': lot['rate_name'],
+                'rate_reference_book': any(
+                    item for item in list_of_lots_from_db
+                    if item['stage_name'] == lot['stage_name'] and
+                    item['rate_name'] == lot['rate_name']
+                ),
+                'unit': lot['unit_name'],
+                'unit_reference_book': any(
+                    item for item in list_of_lots_from_db
+                    if item['stage_name'] == lot['stage_name'] and
+                    item['rate_name'] == lot['rate_name'] and
+                    item['unit_name'] == lot['unit_name']
+                )
+            })
 
-    # for item in [subject, segment, sub_segment]:
-    #     response_data['fields'].append({
-    #         'value': item[0]['name'],
-    #         'reference_book': not item[1]
-    #     })
+    response_data['stages'] = stages
+
+    list_of_lots_from_excel = list(filter(
+        lambda x: next(
+            (item for item in list_of_lots_from_db
+             if item['stage_name'] == x['stage_name'] and
+             item['rate_name'] == x['rate_name'] and
+             item['unit_name'] == x['unit_name']),
+            False
+        ),
+        list_of_lots_from_excel
+    ))
+
+    for lot in list_of_lots_from_excel:
+        lot['segment_id'] = next(
+            (lot2['segment_id'] for lot2 in list_of_lots_from_db if lot['segment_name'] == lot2['segment_name'])
+        )
+        lot['sub_segment_id'] = next(
+            (lot2['sub_segment_id'] for lot2 in list_of_lots_from_db if
+             lot['sub_segment_name'] == lot2['sub_segment_name'])
+        )
+        lot['stage_id'] = next(
+            (lot2['stage_id'] for lot2 in list_of_lots_from_db if lot['stage_name'] == lot2['stage_name'])
+        )
+        lot['rate_id'] = next(
+            (lot2['rate_id'] for lot2 in list_of_lots_from_db if lot['rate_name'] == lot2['rate_name'])
+        )
+        lot['unit_id'] = next(
+            (lot2['unit_id'] for lot2 in list_of_lots_from_db if lot['unit_name'] == lot2['unit_name'])
+        )
+    with db_handle.atomic() as transaction:
+        try:
+            # TODO
+            # dict_list_of_lots_by_id = {}
+            # for lot in list_of_lots_by_id:
+            #     dict_list_of_lots_by_id[lot['unit']] = {}
+            list_of_lots_without_duplicate = list({v['id']: v for v in list_of_lots_by_id}.values())
+            delete_query = Lot.delete().where(Lot.procurement_id == procurement_id)
+            delete_query.execute()
+            for lot in list_of_lots_from_excel:
+                Lot.create(procurement_id=procurement_id,
+                           segment_id=lot["segment_id"],
+                           sub_segment_id=lot["sub_segment_id"],
+                           service_code=lot["service_code"],
+                           stage_id=lot['stage_id'],
+                           rate_id=lot['rate_id'],
+                           unit_id=lot['unit_id'])
+        except Exception as e:
+            transaction.rollback()
+            logger.exception(e)
+            abort(500, e)
     return response_data
 
 
