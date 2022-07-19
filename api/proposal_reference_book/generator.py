@@ -285,6 +285,51 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
     }
 
 
+def get_excel_by_procurement_id(procurement_id):
+    current_lots = (Lot.select(Lot, Segment.name, Sub_segment.name, Service, Stage, Rate, Unit)
+                    .join(Segment).switch(Lot)
+                    .join(Sub_segment).switch(Lot)
+                    .join(Service).switch(Lot)
+                    .join(Stage).switch(Lot)
+                    .join(Rate).switch(Lot)
+                    .join(Unit)
+                    .where((Lot.procurement_id == procurement_id)))
+    list_of_lots = []
+    service_name = None
+    for lot in current_lots:
+        if service_name is None:
+            service_name = lot.service_code.name
+        list_of_lots.append({
+            'segment_name': lot.segment_id.name,
+            'sub_segment_name': lot.sub_segment_id.name,
+            'service_code': lot.service_code.code,
+            'stage_name': lot.stage_id.name,
+            'rate_name': lot.rate_id.name,
+            'unit_name': lot.unit_id.name,
+        })
+    list_without_duplicates_of_lots = []
+    seen = set()
+    for d in list_of_lots:
+        t = tuple(d.items())
+        if t not in seen:
+            seen.add(t)
+            list_without_duplicates_of_lots.append(d)
+
+    this_is_base64 = generate_sheets(list_without_duplicates_of_lots,
+                                     [],
+                                     '>=D',
+                                     list_of_lots[0]['segment_name'],
+                                     list_of_lots[0]['sub_segment_name'],
+                                     list_of_lots[0]['service_code'],
+                                     service_name)
+
+    return {
+        'proposal_file': this_is_base64,
+        'name': f"{str(procurement_id).upper()} {datetime.now().strftime('%d %H:%M:%S')}.xlsm",
+        'size': int((len(this_is_base64) * 3) / 4)
+    }
+
+
 def is_duplicate(lot, lot2) -> bool:
     return (lot2['is_null'] is not True and
             lot['is_null'] is not True and

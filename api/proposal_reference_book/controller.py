@@ -6,7 +6,7 @@ from flask import Blueprint, request, jsonify
 from api.common import validate_schema
 from api.proposal_reference_book import schemas
 from api.proposal_reference_book.analysis import compare_proposal
-from api.proposal_reference_book.generator import generate_prefilled_proposal
+from api.proposal_reference_book.generator import generate_prefilled_proposal, get_excel_by_procurement_id
 
 logger = logging.getLogger(__name__)
 api = Blueprint('proposal', __name__)
@@ -51,6 +51,21 @@ def compare_proposal_from_initiator():
 
         response_data = compare_proposal(proposal_file, procurement_id)
         jsonschema.validate(response_data, schemas.compare_proposal_from_initiator_response)
+        return jsonify(response_data)
+    except jsonschema.exceptions.ValidationError as err:
+        logger.exception(err.message, exc_info=False)
+        raise Exception(err.message)
+    except Exception as e:
+        logger.exception(e)
+        raise
+
+
+@api.route('/api/get_by_id', methods=['POST'])
+def get_by_id():
+    try:
+        procurement_id = request.json['procurement_id']
+        response_data = get_excel_by_procurement_id(procurement_id)
+        jsonschema.validate(response_data, schemas.create_proposal_response)
         return jsonify(response_data)
     except jsonschema.exceptions.ValidationError as err:
         logger.exception(err.message, exc_info=False)
