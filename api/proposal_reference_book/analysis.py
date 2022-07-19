@@ -127,7 +127,6 @@ def compare_proposal(proposal_file, procurement_id):
                 'rows': []
             }
             stages.append(stage)
-        # row = next((item for item in stage['rows'] if item['name'] == lot['']))
         if stage['reference_book'] is False:
             stage['rows'].append({
                 'rate': lot['rate_name'],
@@ -184,11 +183,38 @@ def compare_proposal(proposal_file, procurement_id):
         )
     with db_handle.atomic() as transaction:
         try:
-            # TODO
-            # dict_list_of_lots_by_id = {}
-            # for lot in list_of_lots_by_id:
-            #     dict_list_of_lots_by_id[lot['unit']] = {}
-            list_of_lots_without_duplicate = list({v['id']: v for v in list_of_lots_by_id}.values())
+            list_of_null_lots = []
+            for lot in list_of_lots_by_id:
+                is_exist = False
+                for lot2 in list_of_lots_from_excel:
+                    is_exist = is_duplicate(lot, lot2)
+                    if is_exist:
+                        break
+
+                if is_exist is False:
+                    list_of_null_lots.append(lot)
+            del lot2
+
+            for lot in list_of_null_lots:
+                number_of_existing = 0
+                for lot2 in list_of_lots_from_db:
+                    if is_duplicate(lot, lot2):
+                        number_of_existing += 1
+                if number_of_existing == 1:
+                    update_query = (
+                        Lot.update(procurement_id='0', is_null=True)
+                        .where(
+                            (Lot.segment_id == lot['segment_id']) &
+                            (Lot.sub_segment_id == lot['sub_segment_id']) &
+                            (Lot.service_code == lot['service_code']) &
+                            (Lot.procurement_id == lot['id']) &
+                            (Lot.stage_id == lot['stage_id']) &
+                            (Lot.rate_id == lot['rate_id']) &
+                            (Lot.unit_id == lot['unit_id'])
+                        )
+                    )
+                    update_query.execute()
+
             delete_query = Lot.delete().where(Lot.procurement_id == procurement_id)
             delete_query.execute()
             for lot in list_of_lots_from_excel:
@@ -275,3 +301,12 @@ def excel_validation(wb: Workbook):
                     f'Ошибка в формуле в столбец \"ИТОГО в валюте Участника\", '
                     f'в строке {index}')
     return end_index_row
+
+
+def is_duplicate(lot, lot2) -> bool:
+    return (lot2['segment_id'] == lot['segment_id'] and
+            lot2['sub_segment_id'] == lot['sub_segment_id'] and
+            lot2['service_code'] == lot['service_code'] and
+            lot2['stage_id'] == lot['stage_id'] and
+            lot2['rate_id'] == lot['rate_id'] and
+            lot2['unit_id'] == lot['unit_id'])
