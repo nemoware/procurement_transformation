@@ -14,8 +14,8 @@ from api.common import env_var
 from db.entity.lot import Lot
 from db.entity.simple_entity import Segment, Sub_segment, Service, Unit, Rate, Stage
 
-max_number_of_stages = env_var('MAX_NUMBER_OF_STAGES', 20)
-max_number_of_rates = env_var('MAX_NUMBER_OF_RATES', 10)
+max_number_of_stages = env_var('MAX_NUMBER_OF_STAGES', 10)
+max_number_of_rates = env_var('MAX_NUMBER_OF_RATES', 20)
 logger = logging.getLogger(__name__)
 
 
@@ -260,10 +260,10 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
             list_without_duplicates_of_all_lots.append(d)
     del seen, d, t, list_of_all_lots
 
-    # list_without_duplicates_of_lots.sort(key=lambda x: x['stage_name'])
-    # list_without_duplicates_of_lots.sort(key=lambda x: (
-    #     number_of_all_stages[x['stage_name']]['count']
-    # ), reverse=True)
+    list_without_duplicates_of_lots.sort(key=lambda x: x['stage_name'])
+    list_without_duplicates_of_lots.sort(key=lambda x: (
+        number_of_all_stages[x['stage_name']]['count']
+    ), reverse=True)
 
     list_without_duplicates_of_lots = list(filter(
         lambda x:
