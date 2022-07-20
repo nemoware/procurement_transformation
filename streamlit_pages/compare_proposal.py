@@ -22,7 +22,7 @@ def send_request_for_compare_proposal(excel_in_base64, procurement_id):
             headers=headers,
             json={
                 'proposal_file': excel_in_base64,
-                'procurement_id': 'арх' + str(procurement_id),
+                'procurement_id': str(procurement_id),
             }
         )
         response_json = response.json()
@@ -59,7 +59,7 @@ def send_request(procurement_id: str):
 
 
 def get_download_link():
-    data = send_request('арх' + str(st.session_state['procurement_id2']))
+    data = send_request(str(st.session_state['procurement_id2']))
     if data.get('message'):
         return data.get('message'), False
     return f'<a href="data:file/xlsm;base64,{data["proposal_file"]}" download="{data["name"]}">Download xlsm file</a>', True
