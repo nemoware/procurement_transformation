@@ -167,8 +167,7 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
     del current_lots
 
     number_of_all_stages = {}
-    list_if_ids = list(
-        sorted(set(map(lambda x: x['id'], list_of_all_lots)), key=lambda x: int(x[3:]) if x != '0' else 0))
+    list_if_ids = list(set(map(lambda x: x['id'], list_of_all_lots)))
     number_of_ids = len(list_if_ids) if '0' not in list_if_ids else len(list_if_ids) - 1
     list_of_stage_name = []
 
