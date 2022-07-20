@@ -155,6 +155,17 @@ def compare_proposal(proposal_file, procurement_id):
 
     response_data['stages'] = stages
 
+    list_of_lots_from_excel = list(filter(
+        lambda x: next(
+            (item for item in list_of_lots_from_db
+             if item['stage_name'] == x['stage_name'] and
+             item['rate_name'] == x['rate_name'] and
+             item['unit_name'] == x['unit_name']),
+            False
+        ),
+        list_of_lots_from_excel
+    ))
+
     for lot in list_of_lots_from_excel:
         lot['segment_id'] = next(
             (lot2['segment_id'] for lot2 in list_of_lots_from_db if lot['segment_name'] == lot2['segment_name'])
@@ -172,17 +183,6 @@ def compare_proposal(proposal_file, procurement_id):
         lot['unit_id'] = next(
             (lot2['unit_id'] for lot2 in list_of_lots_from_db if lot['unit_name'] == lot2['unit_name'])
         )
-
-    list_of_lots_from_excel = list(filter(
-        lambda x: next(
-            (item for item in list_of_lots_from_db
-             if item['stage_name'] == x['stage_name'] and
-             item['rate_name'] == x['rate_name'] and
-             item['unit_name'] == x['unit_name']),
-            False
-        ),
-        list_of_lots_from_excel
-    ))
 
     with db_handle.atomic() as transaction:
         try:
