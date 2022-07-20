@@ -64,7 +64,9 @@ def compare_proposal(proposal_file, procurement_id):
             'is_null': lot.is_null
         })
     list_of_lots_by_id = list(filter(lambda x: x['id'] == procurement_id, list_of_lots_from_db))
-
+    is_new_procurement = False
+    if len(list_of_lots_by_id) == 0:
+        is_new_procurement = True
     del lot, current_lots
 
     list_of_lots_from_excel = []
@@ -153,17 +155,6 @@ def compare_proposal(proposal_file, procurement_id):
 
     response_data['stages'] = stages
 
-    list_of_lots_from_excel = list(filter(
-        lambda x: next(
-            (item for item in list_of_lots_from_db
-             if item['stage_name'] == x['stage_name'] and
-             item['rate_name'] == x['rate_name'] and
-             item['unit_name'] == x['unit_name']),
-            False
-        ),
-        list_of_lots_from_excel
-    ))
-
     for lot in list_of_lots_from_excel:
         lot['segment_id'] = next(
             (lot2['segment_id'] for lot2 in list_of_lots_from_db if lot['segment_name'] == lot2['segment_name'])
@@ -181,42 +172,54 @@ def compare_proposal(proposal_file, procurement_id):
         lot['unit_id'] = next(
             (lot2['unit_id'] for lot2 in list_of_lots_from_db if lot['unit_name'] == lot2['unit_name'])
         )
+
+    list_of_lots_from_excel = list(filter(
+        lambda x: next(
+            (item for item in list_of_lots_from_db
+             if item['stage_name'] == x['stage_name'] and
+             item['rate_name'] == x['rate_name'] and
+             item['unit_name'] == x['unit_name']),
+            False
+        ),
+        list_of_lots_from_excel
+    ))
+
     with db_handle.atomic() as transaction:
         try:
-            list_of_null_lots = []
-            for lot in list_of_lots_by_id:
-                is_exist = False
-                for lot2 in list_of_lots_from_excel:
-                    is_exist = is_duplicate(lot, lot2)
-                    if is_exist:
-                        break
+            if not is_new_procurement:
+                list_of_null_lots = []
+                for lot in list_of_lots_by_id:
+                    is_exist = False
+                    for lot2 in list_of_lots_from_excel:
+                        is_exist = is_duplicate(lot, lot2)
+                        if is_exist:
+                            break
 
-                if is_exist is False:
-                    list_of_null_lots.append(lot)
-            del lot2
+                    if is_exist is False:
+                        list_of_null_lots.append(lot)
 
-            for lot in list_of_null_lots:
-                number_of_existing = 0
-                for lot2 in list_of_lots_from_db:
-                    if is_duplicate(lot, lot2):
-                        number_of_existing += 1
-                if number_of_existing == 1:
-                    update_query = (
-                        Lot.update(procurement_id='0', is_null=True)
-                        .where(
-                            (Lot.segment_id == lot['segment_id']) &
-                            (Lot.sub_segment_id == lot['sub_segment_id']) &
-                            (Lot.service_code == lot['service_code']) &
-                            (Lot.procurement_id == lot['id']) &
-                            (Lot.stage_id == lot['stage_id']) &
-                            (Lot.rate_id == lot['rate_id']) &
-                            (Lot.unit_id == lot['unit_id'])
+                for lot in list_of_null_lots:
+                    number_of_existing = 0
+                    for lot2 in list_of_lots_from_db:
+                        if is_duplicate(lot, lot2):
+                            number_of_existing += 1
+                    if number_of_existing == 1:
+                        update_query = (
+                            Lot.update(procurement_id='0', is_null=True)
+                            .where(
+                                (Lot.segment_id == lot['segment_id']) &
+                                (Lot.sub_segment_id == lot['sub_segment_id']) &
+                                (Lot.service_code == lot['service_code']) &
+                                (Lot.procurement_id == lot['id']) &
+                                (Lot.stage_id == lot['stage_id']) &
+                                (Lot.rate_id == lot['rate_id']) &
+                                (Lot.unit_id == lot['unit_id'])
+                            )
                         )
-                    )
-                    update_query.execute()
+                        update_query.execute()
 
-            delete_query = Lot.delete().where(Lot.procurement_id == procurement_id)
-            delete_query.execute()
+                delete_query = Lot.delete().where(Lot.procurement_id == procurement_id)
+                delete_query.execute()
             for lot in list_of_lots_from_excel:
                 Lot.create(procurement_id=procurement_id,
                            segment_id=lot["segment_id"],
