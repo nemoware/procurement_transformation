@@ -2,7 +2,6 @@ import logging
 
 import numpy as np
 import pandas as pd
-import peewee
 from tqdm import tqdm
 from db import db_init
 from db.entity.lot import Lot
@@ -13,10 +12,19 @@ logger = logging.getLogger(__name__)
 
 def parse_reference_book() -> None:
     df = pd.read_excel(open('УПРОЩ. КП ВР (Анализ рынка. Работы-Услуги)_v4_5.xlsm', 'rb'), sheet_name='Справочник')
+    df_units = pd.read_excel(open('default.xlsx', 'rb'), sheet_name='Sheet1')
+    df_units = df_units[["ЕИ", "Коммерч."]]
+
     list_of_trees = []
     rate = None
     segment, service, stage, sub_segment, unit = None, None, None, None, None
     unique_id = 0
+
+    for index, row_from_excel in tqdm(df_units.iterrows(), desc="Generate units", total=df_units.shape[0]):
+        id_for_unit = row_from_excel['ЕИ']
+        name_for_unit = row_from_excel['Коммерч.']
+        Unit.create(id=id_for_unit, name=name_for_unit)
+
     for index, row in tqdm(df.iterrows(), desc="Generate simple tables", total=df.shape[0]):
         rate, segment, service, stage, sub_segment, unit = get_or_create(row, rate, segment, service, stage,
                                                                          sub_segment, unit)
@@ -167,8 +175,9 @@ def get_or_create(row, rate, segment, service, stage, sub_segment, unit):
         sub_segment = Sub_segment.get_or_create(name=row['Подсегмент'])
 
     if unit is None or unit[0].name != row['Наименование ЕИ']:
-        unit = Unit.get_or_create(name=row['Наименование ЕИ'])
-
+        unit = (Unit.get_or_none(name=row['Наименование ЕИ']), False)
+        if unit[0] is None:
+            raise ValueError('Не была найдена ЕИ взятая из справочника')
     return rate, segment, service, stage, sub_segment, unit
 
 

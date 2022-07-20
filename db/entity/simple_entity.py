@@ -31,7 +31,7 @@ class Sub_segment(BaseModel):
 
 
 class Unit(BaseModel):
-    id = PrimaryKeyField(null=False)
+    id = CharField(primary_key=True, max_length=18)
     name = CharField(null=False, max_length=255, unique=True)
 
 
