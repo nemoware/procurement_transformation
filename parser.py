@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def parse_reference_book() -> None:
     df = pd.read_excel(open('УПРОЩ. КП ВР (Анализ рынка. Работы-Услуги)_v4_5.xlsm', 'rb'), sheet_name='Справочник')
-    df_units = pd.read_excel(open('default.xlsx', 'rb'), sheet_name='Sheet1')
+    df_units = pd.read_excel(open('default.XLSX', 'rb'), sheet_name='Sheet1')
     df_units = df_units[["ЕИ", "Коммерч."]]
 
     list_of_trees = []
