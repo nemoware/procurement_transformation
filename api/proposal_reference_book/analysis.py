@@ -28,10 +28,9 @@ def compare_proposal(proposal_file, procurement_id):
     service_code = ws['C10'].value
     service_name = ws['C11'].value
 
-    subject: (object, bool) = ({'name': subject}, True)
-    segment = Segment.get_or_create(name=segment_name)
-    sub_segment = Sub_segment.get_or_create(name=sub_segment_name)
-    service = Service.get_or_create(name=service_name)
+    segment = Segment.get_or_none(name=segment_name)
+    sub_segment = Sub_segment.get_or_none(name=sub_segment_name)
+    service = Service.get_or_none(code=service_code)
 
     current_lots = (Lot.select(Lot, Segment, Sub_segment, Service, Stage, Rate, Unit)
                     .join(Segment).switch(Lot)
@@ -67,7 +66,7 @@ def compare_proposal(proposal_file, procurement_id):
     is_new_procurement = False
     if len(list_of_lots_by_id) == 0:
         is_new_procurement = True
-    del lot, current_lots
+    del current_lots
 
     list_of_lots_from_excel = []
     prev_stage_name = None
@@ -98,27 +97,31 @@ def compare_proposal(proposal_file, procurement_id):
     response_data = {
         'fields': [{
             'label': 'subject',
-            'value': subject[0]['name'],
-            'reference_book': not subject[1]
+            'value': subject,
+            'reference_book': True
         }, {
             'label': 'segment',
-            'value': segment[0].name,
-            'reference_book': not segment[1]
+            'value': segment_name,
+            'reference_book': bool(segment)
         }, {
             'label': 'sub_segment',
-            'value': sub_segment[0].name,
-            'reference_book': not sub_segment[1]
+            'value': sub_segment_name,
+            'reference_book': bool(sub_segment)
         }, {
             'label': 'service_code',
-            'value': service[0].code,
-            'reference_book': not service[1]
+            'value': service_code,
+            'reference_book': bool(service)
         }, {
             'label': 'service_name',
-            'value': service[0].name,
-            'reference_book': not service[1]
+            'value': service_name,
+            'reference_book': False if service is None else bool(service.name == segment_name)
         }],
         'stages': []
     }
+
+    if segment is None or sub_segment is None or service is None:
+        return response_data
+
     stages = []
     for index, lot in enumerate(list_of_lots_from_excel):
         stage = next((item for item in stages if item['name'] == lot['stage_name']), None)
