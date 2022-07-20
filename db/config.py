@@ -14,6 +14,6 @@ db_handle = PostgresqlDatabase(
     db_name,
     user=user,
     password=password,
-    host='localhost',
+    host=host,
     port=port
 )

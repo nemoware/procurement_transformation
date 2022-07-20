@@ -14,20 +14,14 @@ from api.common import env_var
 from db.entity.lot import Lot
 from db.entity.simple_entity import Segment, Sub_segment, Service, Unit, Rate, Stage
 
-max_number_of_stages = env_var('MAX_NUMBER_OF_STAGES', 20)
-max_number_of_rates = env_var('MAX_NUMBER_OF_RATES', 10)
+max_number_of_stages = env_var('MAX_NUMBER_OF_STAGES', 10)
+max_number_of_rates = env_var('MAX_NUMBER_OF_RATES', 20)
 logger = logging.getLogger(__name__)
 
 
 def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, service_code=None, service_name=None,
                                 subject=None, guaranteed_volume=None):
-    # segment_name = 'Корпоратив защита и защита информации'
-    # sub_segment_name = '-'
-    # service_code = '90303'
-    # service_name = 'Услуги по охране объектов и (или) имущества (в том числе при его транспортировке)'
-
     list_of_stage_ids = []
-    list_of_rate_ids = []
 
     current_stage_ids = (Lot.select(Lot.stage_id, Stage.id, fn.COUNT(Lot.stage_id).alias('num_stage_id'))
                          .join(Segment).switch(Lot)
@@ -47,24 +41,42 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
 
     list_of_stage_ids = list_of_stage_ids[:max_number_of_stages]
 
-    current_rate_ids = (Lot.select(Lot.rate_id, Rate.id, fn.COUNT(Lot.stage_id).alias('num_rate_id'))
-                        .join(Segment).switch(Lot)
-                        .join(Sub_segment).switch(Lot)
-                        .join(Service).switch(Lot)
-                        .join(Rate)
-                        .where((Segment.name == segment_name) &
-                               (Sub_segment.name == sub_segment_name) &
-                               (Service.code == service_code) &
-                               (Lot.stage_id << list(map(lambda x: x['stage_id'], list_of_stage_ids))))
-                        .group_by(Lot.rate_id, Rate.id)
-                        .order_by(SQL('num_rate_id').desc()))
+    current_rate_ids = (
+        Lot.select(Lot.rate_id, Lot.stage_id, Stage.id, Rate.id, Lot.is_null,
+                   fn.COUNT(Lot.stage_id).alias('num_rate_id'))
+        .join(Segment).switch(Lot)
+        .join(Sub_segment).switch(Lot)
+        .join(Service).switch(Lot)
+        .join(Stage).switch(Lot)
+        .join(Rate)
+        .where((Segment.name == segment_name) &
+               (Sub_segment.name == sub_segment_name) &
+               (Service.code == service_code) &
+               (Lot.stage_id << list(map(lambda x: x['stage_id'], list_of_stage_ids))))
+        .group_by(Lot.rate_id, Rate.id, Lot.stage_id, Stage.id, Lot.is_null)
+        .order_by(SQL('num_rate_id').desc()))
 
+    dict_of_rate_ids = {}
     for lot in current_rate_ids:
-        list_of_rate_ids.append({
+        dict_of_rate_ids.setdefault(lot.stage_id.id, []).append({
             'rate_id': lot.rate_id.id,
-            'num_rate_id': lot.num_rate_id
+            'num_rate_id': lot.num_rate_id,
+            'is_null': lot.is_null
         })
-    list_of_rate_ids = list_of_rate_ids[:max_number_of_rates]
+
+    list_of_rate_ids = []
+    for stage in dict_of_rate_ids:
+        count = 0
+        for rate in dict_of_rate_ids[stage]:
+            if count == max_number_of_rates:
+                break
+            else:
+                list_of_rate_ids.append(rate['rate_id'])
+                if rate['is_null']:
+                    continue
+                count += 1
+
+    list_of_rate_ids = list(set(list_of_rate_ids))
 
     current_lots = (Lot.select(Lot,
                                Segment.name,
@@ -86,7 +98,7 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
                            (Sub_segment.name == sub_segment_name) &
                            (Service.code == service_code) &
                            (Lot.stage_id << list(map(lambda x: x['stage_id'], list_of_stage_ids))) &
-                           (Lot.rate_id << list(map(lambda x: x['rate_id'], list_of_rate_ids))))
+                           (Lot.rate_id << list(map(lambda x: x, list_of_rate_ids))))
                     )
 
     list_of_lots = []
@@ -248,10 +260,10 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
             list_without_duplicates_of_all_lots.append(d)
     del seen, d, t, list_of_all_lots
 
-    # list_without_duplicates_of_lots.sort(key=lambda x: x['stage_name'])
-    # list_without_duplicates_of_lots.sort(key=lambda x: (
-    #     number_of_all_stages[x['stage_name']]['count']
-    # ), reverse=True)
+    list_without_duplicates_of_lots.sort(key=lambda x: x['stage_name'])
+    list_without_duplicates_of_lots.sort(key=lambda x: (
+        number_of_all_stages[x['stage_name']]['count']
+    ), reverse=True)
 
     list_without_duplicates_of_lots = list(filter(
         lambda x:
@@ -269,6 +281,51 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
     return {
         'proposal_file': this_is_base64,
         'name': f"КП {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.xlsm",
+        'size': int((len(this_is_base64) * 3) / 4)
+    }
+
+
+def get_excel_by_procurement_id(procurement_id):
+    current_lots = (Lot.select(Lot, Segment.name, Sub_segment.name, Service, Stage, Rate, Unit)
+                    .join(Segment).switch(Lot)
+                    .join(Sub_segment).switch(Lot)
+                    .join(Service).switch(Lot)
+                    .join(Stage).switch(Lot)
+                    .join(Rate).switch(Lot)
+                    .join(Unit)
+                    .where((Lot.procurement_id == procurement_id)))
+    list_of_lots = []
+    service_name = None
+    for lot in current_lots:
+        if service_name is None:
+            service_name = lot.service_code.name
+        list_of_lots.append({
+            'segment_name': lot.segment_id.name,
+            'sub_segment_name': lot.sub_segment_id.name,
+            'service_code': lot.service_code.code,
+            'stage_name': lot.stage_id.name,
+            'rate_name': lot.rate_id.name,
+            'unit_name': lot.unit_id.name,
+        })
+    list_without_duplicates_of_lots = []
+    seen = set()
+    for d in list_of_lots:
+        t = tuple(d.items())
+        if t not in seen:
+            seen.add(t)
+            list_without_duplicates_of_lots.append(d)
+
+    this_is_base64 = generate_sheets(list_without_duplicates_of_lots,
+                                     [],
+                                     '>=D',
+                                     list_of_lots[0]['segment_name'],
+                                     list_of_lots[0]['sub_segment_name'],
+                                     list_of_lots[0]['service_code'],
+                                     service_name)
+
+    return {
+        'proposal_file': this_is_base64,
+        'name': f"{str(procurement_id).upper()} {datetime.now().strftime('%d %H:%M:%S')}.xlsm",
         'size': int((len(this_is_base64) * 3) / 4)
     }
 
@@ -328,7 +385,8 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
         else:
             ws.merge_cells(start_row=start_index, start_column=2, end_row=end_index, end_column=2)
             ws.append([
-                index_of_number, 'Итого:', '', '', '',
+                f'=ROW(A{index + shift_index})-17',
+                'Итого:', '', '', '',
                 f'=SUM(F{start_index}:F{end_index})',
                 f'=SUM(G{start_index}:G{end_index})',
                 f'=SUM(H{start_index}:H{end_index})',
@@ -352,9 +410,9 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
 
         lot = list(lot.values())
         del lot[0:3]
-        lot.insert(0, index_of_number)
+        lot.insert(0, f'=ROW(A{index + shift_index})-17')
         lot.insert(3, 'Заполняется при необходимости. См. пояснения п.3.')
-        lot.extend([0, 0, 0])
+        lot.extend([0, 0, f'=F{index + shift_index}*G{index + shift_index}'])
         ws.append(lot)
         for row in range(start_index, end_index + 1):
             for ind, cell in enumerate(ws[row]):
@@ -380,7 +438,8 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
 
     ws.merge_cells(start_row=start_index, start_column=2, end_row=end_index, end_column=2)
     ws.append([
-        index_of_number, 'Итого:', '', '', '',
+        f'=ROW(A{end_index + 1})-17',
+        'Итого:', '', '', '',
         f'=SUM(F{start_index}:F{end_index})',
         f'=SUM(G{start_index}:G{end_index})',
         f'=SUM(H{start_index}:H{end_index})',
@@ -406,7 +465,7 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
             cell = ws2.cell(row=19, column=column_index)
             new_cell = ws.cell(row=end_index + 1, column=column_index)
             if column_index == 1:
-                new_cell.value = copy(index_of_number)
+                new_cell.value = f'=ROW(A{end_index + 1})-17'
             else:
                 new_cell.value = copy(cell.value)
             copy_style(cell, new_cell)
