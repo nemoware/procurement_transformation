@@ -1,5 +1,6 @@
 import base64
 import logging
+import math
 from copy import copy
 from datetime import datetime
 
@@ -13,6 +14,7 @@ from peewee import fn, SQL
 from api.common import env_var
 from db.entity.lot import Lot
 from db.entity.simple_entity import Segment, Sub_segment, Service, Unit, Rate, Stage
+from PIL import ImageFont
 
 max_number_of_stages = env_var('MAX_NUMBER_OF_STAGES', 10)
 max_number_of_rates = env_var('MAX_NUMBER_OF_RATES', 20)
@@ -23,43 +25,40 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
                                 subject=None, guaranteed_volume=None):
     list_of_stage_ids = []
 
-    current_stage_ids = (Lot.select(Lot.stage_id, Stage.id, fn.COUNT(Lot.stage_id).alias('num_stage_id'))
+    current_stage_ids = (Lot.select(Lot.stage_id, fn.COUNT(Lot.stage_id).alias('num_stage_id'))
                          .join(Segment).switch(Lot)
                          .join(Sub_segment).switch(Lot)
                          .join(Service).switch(Lot)
-                         .join(Stage)
                          .where(Segment.name == segment_name, Sub_segment.name == sub_segment_name,
                                 Service.code == service_code)
-                         .group_by(Lot.stage_id, Stage.id)
+                         .group_by(Lot.stage_id)
                          .order_by(SQL('num_stage_id').desc()))
 
     for lot in current_stage_ids:
         list_of_stage_ids.append({
-            'stage_id': lot.stage_id.id,
+            'stage_id': lot.stage_id_id,
             'num_stage_id': lot.num_stage_id
         })
 
     list_of_stage_ids = list_of_stage_ids[:max_number_of_stages]
 
     current_rate_ids = (
-        Lot.select(Lot.rate_id, Lot.stage_id, Stage.id, Rate.id, Lot.is_null,
+        Lot.select(Lot.rate_id, Lot.stage_id, Lot.is_null,
                    fn.COUNT(Lot.stage_id).alias('num_rate_id'))
         .join(Segment).switch(Lot)
         .join(Sub_segment).switch(Lot)
         .join(Service).switch(Lot)
-        .join(Stage).switch(Lot)
-        .join(Rate)
         .where((Segment.name == segment_name) &
                (Sub_segment.name == sub_segment_name) &
                (Service.code == service_code) &
                (Lot.stage_id << list(map(lambda x: x['stage_id'], list_of_stage_ids))))
-        .group_by(Lot.rate_id, Rate.id, Lot.stage_id, Stage.id, Lot.is_null)
+        .group_by(Lot.rate_id, Lot.stage_id, Lot.is_null)
         .order_by(SQL('num_rate_id').desc()))
 
     dict_of_rate_ids = {}
     for lot in current_rate_ids:
-        dict_of_rate_ids.setdefault(lot.stage_id.id, []).append({
-            'rate_id': lot.rate_id.id,
+        dict_of_rate_ids.setdefault(lot.stage_id_id, []).append({
+            'rate_id': lot.rate_id_id,
             'num_rate_id': lot.num_rate_id,
             'is_null': lot.is_null
         })
@@ -366,15 +365,20 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
     ws: Worksheet = workbook["Форма КП (для анализа рынка) ВР"]
     index_of_number = 1
     ws['C6'] = subject
+    ws.row_dimensions[6].height = 15 * get_height_for_row(subject)
     ws['C8'] = segment_name
+    ws.row_dimensions[8].height = 15 * get_height_for_row(segment_name)
     ws['C9'] = sub_segment_name
+    ws.row_dimensions[9].height = 15 * get_height_for_row(sub_segment_name)
     ws['C10'] = service_code
     ws['C11'] = service_name
+    ws.row_dimensions[11].height = 15 * get_height_for_row(service_name)
 
     prev_stage_name = None
     start_index = 0
     end_index = 0
     shift_index = 0
+    total_height_of_one_segment = 0
     for index, lot in enumerate(list_without_duplicates_of_lots, start=18):
         if prev_stage_name is None:
             prev_stage_name = lot['stage_name']
@@ -390,17 +394,18 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
                 f'=SUM(G{start_index}:G{end_index})',
                 f'=SUM(H{start_index}:H{end_index})',
             ])
-            ws.merge_cells(start_row=end_index + 1, start_column=2, end_row=end_index + 1, end_column=4)
-            ws.row_dimensions[end_index + 1].height = 23.25
-            for ind, cell in enumerate(ws[end_index + 1]):
-                cell.border = Border(left=Side(style='medium'),
-                                     right=Side(style='medium'),
-                                     top=Side(style='medium'),
-                                     bottom=Side(style='medium'))
-                cell.alignment = Alignment(vertical='center')
-                if ind in [5, 6, 7]:
-                    cell.number_format = numbers.FORMAT_NUMBER_00
-                    cell.alignment = Alignment(vertical='center', horizontal='center')
+            set_final_line_by_segment(end_index, ws)
+
+            total_height_of_one_segment = 0
+            for row in range(start_index, end_index + 1):
+                total_height_of_one_segment += ws.row_dimensions[row].height
+
+            row_height = total_height_of_one_segment - (
+                    get_coefficient_for_height(ws[f'B{start_index}'].value, width_col=8.0) * 15)
+            if row_height < 0:
+                ws.row_dimensions[start_index].height = 62.25 + (
+                        get_coefficient_for_height(ws[f'B{start_index}'].value, width_col=8.0) * 15)
+
             shift_index += 1
             start_index = index + shift_index
             end_index = index + shift_index
@@ -413,26 +418,30 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
         lot.insert(3, 'Заполняется при необходимости. См. пояснения п.3.')
         lot.extend([0, 0, f'=F{index + shift_index}*G{index + shift_index}'])
         ws.append(lot)
-        for row in range(start_index, end_index + 1):
-            for ind, cell in enumerate(ws[row]):
-                cell.font = Font(name='Arial', size=10)
-                if ind == 1:
-                    cell.fill = PatternFill(fgColor="B7DEE8", fill_type="solid")
-                if ind in [2, 3]:
-                    if ind == 3:
-                        cell.font = Font(name='Arial', size=10, color="595959", italic=True)
-                    cell.alignment = Alignment(vertical='center', wrapText=True)
-                else:
-                    cell.alignment = Alignment(vertical='center',
-                                               horizontal='center',
-                                               wrapText=True)
-                if ind in [5, 6, 7]:
-                    cell.number_format = numbers.FORMAT_NUMBER_00
-                cell.border = Border(left=Side(style='medium'),
-                                     right=Side(style='medium'),
-                                     top=Side(style='medium'),
-                                     bottom=Side(style='medium'))
-            ws.row_dimensions[row].height = 62.25
+
+        coefficient_for_height: int = 0
+        for ind, cell in enumerate(ws[end_index]):
+            cell.font = Font(name='Arial', size=10)
+            if ind == 1:
+                cell.fill = PatternFill(fgColor="B7DEE8", fill_type="solid")
+            if ind in [2, 3]:
+                if ind == 2:
+                    coefficient_for_height = get_coefficient_for_height(cell.value, width_col=4)
+                if ind == 3:
+                    cell.font = Font(name='Arial', size=10, color="595959", italic=True)
+                cell.alignment = Alignment(vertical='center', wrapText=True)
+            else:
+                cell.alignment = Alignment(vertical='center',
+                                           horizontal='center',
+                                           wrapText=True)
+            if ind in [5, 6, 7]:
+                cell.number_format = numbers.FORMAT_NUMBER_00
+            cell.border = Border(left=Side(style='medium'),
+                                 right=Side(style='medium'),
+                                 top=Side(style='medium'),
+                                 bottom=Side(style='medium'))
+            row_height = (15 * coefficient_for_height)
+            ws.row_dimensions[end_index].height = 62.25 if 62.25 - row_height > 0 else row_height
         index_of_number += 1
 
     ws.merge_cells(start_row=start_index, start_column=2, end_row=end_index, end_column=2)
@@ -443,18 +452,8 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
         f'=SUM(G{start_index}:G{end_index})',
         f'=SUM(H{start_index}:H{end_index})',
     ])
+    set_final_line_by_segment(end_index, ws)
     index_of_number += 1
-    ws.merge_cells(start_row=end_index + 1, start_column=2, end_row=end_index + 1, end_column=4)
-    ws.row_dimensions[end_index + 1].height = 23.25
-    for ind, cell in enumerate(ws[end_index + 1]):
-        cell.border = Border(left=Side(style='medium'),
-                             right=Side(style='medium'),
-                             top=Side(style='medium'),
-                             bottom=Side(style='medium'))
-        cell.alignment = Alignment(vertical='center')
-        if ind in [5, 6, 7]:
-            cell.number_format = numbers.FORMAT_NUMBER_00
-            cell.alignment = Alignment(vertical='center', horizontal='center')
     ws2 = workbook['footer']
 
     if any(item for item in list_without_duplicates_of_lots if
@@ -513,3 +512,34 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
     this_is_base64 = base64.b64encode(virtual_workbook).decode('UTF-8')
 
     return this_is_base64
+
+
+def set_final_line_by_segment(end_index, ws):
+    ws.merge_cells(start_row=end_index + 1, start_column=2, end_row=end_index + 1, end_column=4)
+    ws.row_dimensions[end_index + 1].height = 23.25
+    for ind, cell in enumerate(ws[end_index + 1]):
+        cell.border = Border(left=Side(style='medium'),
+                             right=Side(style='medium'),
+                             top=Side(style='medium'),
+                             bottom=Side(style='medium'))
+        cell.alignment = Alignment(vertical='center')
+        if ind in [5, 6, 7]:
+            cell.number_format = numbers.FORMAT_NUMBER_00
+            cell.alignment = Alignment(vertical='center', horizontal='center')
+        if ind == 0:
+            cell.alignment = Alignment(vertical='center', horizontal='center')
+
+
+def get_height_for_row(value: str) -> int:
+    font = ImageFont.truetype('arial.ttf', 10)
+    size = font.getlength(value)
+    return math.ceil(size / 679)
+
+
+def get_coefficient_for_height(value: str, width_col: float = 6.60) -> int:
+    cm_to_px: float = 37.7952755906
+    font = ImageFont.truetype('arial.ttf', 10)
+    size = font.getlength(value)
+    width_string = size / cm_to_px
+
+    return math.ceil(width_string / width_col)
