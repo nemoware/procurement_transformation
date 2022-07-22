@@ -212,6 +212,9 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
         else:
             lot['number_of_units'] = number_of_all_stages[lot['stage_name']][lot['rate_name']][lot['unit_name']][
                 'count']
+        lot['percent_of_stages'] = lot['number_of_stages'] / (number_of_ids / 100)
+        lot['percent_of_rates'] = lot['number_of_rates'] / (lot['number_of_stages'] / 100)
+        lot['percent_of_units'] = lot['number_of_units'] / (lot['number_of_rates'] / 100)
 
     list_of_lots = list(filter(lambda x: x['id'] != '0', list_of_lots))
     list_of_lots.sort(
@@ -246,7 +249,7 @@ def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, servic
     )
 
     for element in list_of_all_lots:
-        del element['id']
+        del element['id'], element['stage_id'], element['rate_id'], element['unit_id'], element['is_null'],
     del element, number_of_ids
 
     list_without_duplicates_of_all_lots = []
@@ -505,8 +508,11 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
         ws.row_dimensions[end_index + ind].height = 21.75
 
     ws = workbook["Справочник"]
-    for index, lot in enumerate(list_without_duplicates_of_all_lots, start=1):
+    for index, lot in enumerate(list_without_duplicates_of_all_lots, start=2):
         ws.append(list(lot.values()))
+        if index % 2 == 1:
+            for cell in ws[index]:
+                cell.fill = PatternFill(fgColor="FDE9D9", fill_type="solid")
     workbook.active = workbook['Форма КП (для анализа рынка) ВР']
     virtual_workbook = save_virtual_workbook(workbook)
     this_is_base64 = base64.b64encode(virtual_workbook).decode('UTF-8')
