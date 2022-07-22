@@ -1,6 +1,6 @@
 import base64
 import logging
-import math
+import re
 from copy import copy
 from datetime import datetime
 
@@ -14,7 +14,6 @@ from peewee import fn, SQL
 from api.common import env_var
 from db.entity.lot import Lot
 from db.entity.simple_entity import Segment, Sub_segment, Service, Unit, Rate, Stage
-from PIL import ImageFont
 
 max_number_of_stages = env_var('MAX_NUMBER_OF_STAGES', 10)
 max_number_of_rates = env_var('MAX_NUMBER_OF_RATES', 20)
@@ -364,18 +363,17 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
                     segment_name=None, sub_segment_name=None, service_code=None, service_name=None):
     workbook = load_workbook(filename=f"Пустой шаблон.xlsm", read_only=False,
                              keep_vba=True)
-
     ws: Worksheet = workbook["Форма КП (для анализа рынка) ВР"]
     index_of_number = 1
     ws['C6'] = subject
-    ws.row_dimensions[6].height = 15 * get_height_for_row(subject)
+    ws.row_dimensions[6].height = 15 * get_height_for_row2(subject, max_length=125)
     ws['C8'] = segment_name
-    ws.row_dimensions[8].height = 15 * get_height_for_row(segment_name)
+    ws.row_dimensions[8].height = 15 * get_height_for_row2(segment_name, max_length=125)
     ws['C9'] = sub_segment_name
-    ws.row_dimensions[9].height = 15 * get_height_for_row(sub_segment_name)
+    ws.row_dimensions[9].height = 15 * get_height_for_row2(sub_segment_name, max_length=125)
     ws['C10'] = service_code
     ws['C11'] = service_name
-    ws.row_dimensions[11].height = 15 * get_height_for_row(service_name)
+    ws.row_dimensions[11].height = 15 * get_height_for_row2(service_name, max_length=125)
 
     prev_stage_name = None
     start_index = 0
@@ -404,10 +402,10 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
                 total_height_of_one_segment += ws.row_dimensions[row].height
 
             row_height = total_height_of_one_segment - (
-                    get_coefficient_for_height(ws[f'B{start_index}'].value, width_col=8.0) * 15)
+                    get_height_for_row2(ws[f'B{start_index}'].value, max_length=40) * 15)
             if row_height < 0:
                 ws.row_dimensions[start_index].height = 62.25 + (
-                        get_coefficient_for_height(ws[f'B{start_index}'].value, width_col=8.0) * 15)
+                        get_height_for_row2(ws[f'B{start_index}'].value, max_length=40) * 15)
 
             shift_index += 1
             start_index = index + shift_index
@@ -429,7 +427,7 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
                 cell.fill = PatternFill(fgColor="B7DEE8", fill_type="solid")
             if ind in [2, 3]:
                 if ind == 2:
-                    coefficient_for_height = get_coefficient_for_height(cell.value, width_col=4)
+                    coefficient_for_height = get_height_for_row2(cell.value, max_length=31)
                 if ind == 3:
                     cell.font = Font(name='Arial', size=10, color="595959", italic=True)
                 cell.alignment = Alignment(vertical='center', wrapText=True)
@@ -536,16 +534,23 @@ def set_final_line_by_segment(end_index, ws):
             cell.alignment = Alignment(vertical='center', horizontal='center')
 
 
-def get_height_for_row(value: str) -> int:
-    font = ImageFont.truetype('arial.ttf', 10)
-    size = font.getlength(value)
-    return math.ceil(size / 679)
+def get_height_for_row2(value: str, max_length: int):
+    re_compile = re.compile(r'([^a-zA-ZА-Яа-я\(\)]+|[a-zA-ZА-Яа-я\(\)])')
+    only_special_charter = re.compile(r'([^a-zA-ZА-Яа-я\(\)]+)')
+    split = re_compile.split(value)
+    split: list[str] = list(filter(lambda x: x != '', split))
+    number_of_lines = 1
+    acc = ''
+    for letter in split:
+        if len(acc) < max_length:
+            acc += letter
+        else:
+            number_of_lines += 1
+            charter_split = only_special_charter.split(acc)
+            charter_split.insert(0, letter)
+            charter_split = list(filter(lambda x: x != '', charter_split))
+            if charter_split:
+                last_special_charter = charter_split[-1]
+                acc = last_special_charter
 
-
-def get_coefficient_for_height(value: str, width_col: float = 6.60) -> int:
-    cm_to_px: float = 37.7952755906
-    font = ImageFont.truetype('arial.ttf', 10)
-    size = font.getlength(value)
-    width_string = size / cm_to_px
-
-    return math.ceil(width_string / width_col)
+    return number_of_lines
