@@ -307,6 +307,8 @@ def get_excel_by_procurement_id(procurement_id):
             'rate_name': lot.rate_id.name,
             'unit_name': lot.unit_id.name,
         })
+    if len(list_of_lots) == 0:
+        raise ValueError('Такого ИД закупки не существует')
     list_without_duplicates_of_lots = []
     seen = set()
     for d in list_of_lots:
