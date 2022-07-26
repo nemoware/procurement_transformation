@@ -21,6 +21,7 @@ import nltk
 from nltk.stem.snowball import SnowballStemmer
 import re
 
+from api.common import env_var
 from api.seeds_ranking.asuz.integration import get_procurements
 from db.config import db_handle
 from db.entity.historical_lot import HistoricalLot
@@ -28,7 +29,8 @@ from db.entity.historical_lot import HistoricalLot
 exclude_pos = [ADP, CONJ, CCONJ, PUNCT, SCONJ, SYM]
 logger = logging.getLogger(__name__)
 historical_lot_cache = {}
-lock = Lock()
+historical_lot_cache_lock = Lock()
+embedding_loading_lock = Lock()
 
 
 def noun_chunks(obj):
@@ -79,9 +81,9 @@ def noun_chunks(obj):
 
 def load_data():
     logger.info('Initialization')
-    data = json.load(open("api/seeds_ranking/embeddings/embeddings.json", "r", encoding='utf-8'))
+    embedding_path = env_var('EMBEDDING_PATH', 'api/seeds_ranking/embeddings/embeddings.json')
+    data = json.load(open(embedding_path, "r", encoding='utf-8'))
     embeddings = pd.DataFrame.from_dict(data)
-    #print(embeddings)
     logger.info('Precalculated embeddings loaded successfully')
     return embeddings
 
@@ -110,10 +112,14 @@ embeddings = None
 
 
 def get_embeddings():
-    global embeddings
-    if embeddings is None:
-        embeddings = load_data()
-    return embeddings
+    try:
+        embedding_loading_lock.acquire()
+        global embeddings
+        if embeddings is None:
+            embeddings = load_data()
+        return embeddings
+    finally:
+        embedding_loading_lock.release()
 
 
 def normalize(text: str) -> str:
@@ -348,10 +354,10 @@ def update_asuz_data_cache(lots):
 def filter_asuz_data(request_json):
     lots = get_procurements()
     try:
-        lock.acquire()
+        historical_lot_cache_lock.acquire()
         lots = update_asuz_data_cache(lots)
     finally:
-        lock.release()
+        historical_lot_cache_lock.release()
 
     search_request = request_json.get('search_request')
     start_date = request_json.get('start_pur_date')
