@@ -204,7 +204,7 @@ def find_nearest_chunks(chunks, n=1):
 #     return max_similarity, best_kernel
 
 
-def exclude_stop_words(chunks):
+def exclude_stop_words(chunks: []):
     result = []
     for chunk in chunks:
         exclude = False
@@ -215,6 +215,34 @@ def exclude_stop_words(chunks):
             result.append(chunk)
     if len(result) == 0:
         result = chunks
+    return result
+
+
+def exclude_stop_words_from_query(query: str):
+    result = ''
+    doc = nlp(query)
+    exclude = set()
+    for stop_word in stop_words:
+        stop_sub_words = stop_word.split(' ')
+        matched = []
+        for token in doc:
+            if token.lemma_.lower() == stop_sub_words[0]:
+                matched.append(token.i)
+                nbor = token.nbor()
+                for k, stop_sub_word in enumerate(stop_sub_words[1:]):
+                    if nbor.lemma_.lower() == stop_sub_word:
+                        matched.append(token.i + 1 + k)
+                    nbor = nbor.nbor()
+                if len(matched) == len(stop_sub_words):
+                    exclude.update(matched)
+                    matched.clear()
+            else:
+                matched.clear()
+    for token in doc:
+        if token.i not in exclude:
+            result += token.text_with_ws
+    if len(result) == 0:
+        result = query
     return result
 
 
@@ -300,7 +328,11 @@ def generate_seeds(query):
 def filter_condition(lot: [dict], start_date: datetime, end_date: datetime, service_code: str, service_name: str) -> bool:
     lot_date = None
     if lot.get('purchase_date', '') != '':
-        lot_date = datetime.fromisoformat(lot['purchase_date'])
+        try:
+            lot_date = datetime.fromisoformat(lot['purchase_date'])
+        except Exception as ex:
+            logger.error(f'Purchase date: {lot.get("purchase_date")}')
+            logger.exception(ex)
     if lot_date is not None:
         if start_date is not None and lot_date < start_date:
             return False
@@ -314,7 +346,8 @@ def filter_condition(lot: [dict], start_date: datetime, end_date: datetime, serv
 
 
 def filter_by_similarity(input_str: str, lots: [dict], similarity_threshold=-1) -> [dict]:
-    input_embedding = embed(input_str)
+    clear_input = exclude_stop_words_from_query(input_str)
+    input_embedding = embed(clear_input)
     result = []
     for lot in lots:
         if lot.get('embedding') is None:
