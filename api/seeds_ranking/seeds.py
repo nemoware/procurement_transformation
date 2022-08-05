@@ -122,6 +122,9 @@ def get_embeddings():
         embedding_loading_lock.release()
 
 
+get_embeddings()
+
+
 def normalize(text: str) -> str:
     return text.translate(str.maketrans('', '', string.punctuation))
 

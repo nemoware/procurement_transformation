@@ -8,7 +8,7 @@ from api.seeds_ranking.routes import api as seeds_ranking_api
 from api.proposal_reference_book.controller import api as proposal_reference_book_api
 from db import db_init
 
-logging.basicConfig(level=logging.DEBUG, format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
+logging.basicConfig(level=logging.INFO, force=True)
 __version__ = "1.0.0"
 logger = logging.getLogger(__name__)
 

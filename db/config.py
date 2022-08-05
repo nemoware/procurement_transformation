@@ -8,7 +8,7 @@ user = env_var('DB_USER', 'postgres')
 password = env_var('DB_PASSWORD')
 db_name = env_var('DB_NAME', 'procurement_transformation')
 host = env_var('DB_HOST', 'localhost')
-port = env_var('DB_port', 5432)
+port = env_var('DB_PORT', 5432)
 
 db_handle = PostgresqlDatabase(
     db_name,
