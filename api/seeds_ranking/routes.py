@@ -45,7 +45,7 @@ def calculate_similarity():
     try:
         logger.info('Start calculate_similarity')
         start = time.perf_counter()
-        subjects = filter_by_similarity(request.json['name_subject'], request.json['search_results'])
+        subjects = filter_by_similarity(request.json['name_subject'], request.json['search_results'], 'name_objects')
         for subject in subjects:
             subject.pop('name_objects', None)
         logger.info(f'End calculate_similarity. Time spent={round(time.perf_counter() - start, 2)}s')

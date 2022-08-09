@@ -252,6 +252,30 @@ def exclude_stop_words_from_query(query: str):
     return result
 
 
+def contain_names(names: [str], test_str: str) -> float:
+    result = 0.0
+    lower_test_str = test_str.lower()
+    for name in names:
+        name_parts = name.lower().split(' ')
+        name_words_qty = len(name_parts)
+        matched = 0
+        for name_part in name_parts:
+            if name_part in lower_test_str:
+                matched += 1
+        if name_words_qty != 0:
+            result = result + matched / name_words_qty
+    return result / len(names)
+
+
+def extract_names(query: str) -> [str]:
+    result = []
+    doc = nlp(query)
+    for entity in doc.ents:
+        if entity.label_ in ['ORG', 'PERSON', 'PRODUCT']:
+            result.append(entity.text)
+    return result
+
+
 def generate_queries(query, length=0, n=10):
     chunks = get_clean_noun_chunks([query])[0]
     logger.debug(chunks)
@@ -351,8 +375,9 @@ def filter_condition(lot: [dict], start_date: datetime, end_date: datetime, serv
     return True
 
 
-def filter_by_similarity(input_str: str, lots: [dict], similarity_threshold=-1) -> [dict]:
+def filter_by_similarity(input_str: str, lots: [dict], subject_field: str, similarity_threshold=-1) -> [dict]:
     clear_input = re.sub('\\s+', ' ', input_str)
+    names = extract_names(clear_input)
     clear_input = exclude_stop_words_from_query(clear_input)
     input_embedding = embed(clear_input)
     result = []
@@ -362,6 +387,11 @@ def filter_by_similarity(input_str: str, lots: [dict], similarity_threshold=-1) 
         else:
             embedding = lot['embedding']
         similarity = 1 - spatial.distance.cosine(embedding, input_embedding) / 2
+        if len(names) > 0:
+            name_percent = contain_names(names, lot[subject_field])
+            similarity += 0.1 * name_percent
+            if similarity >= 1:
+                similarity = 0.99
         if similarity > similarity_threshold:
             lot['similarity'] = similarity
             result.append(lot)
@@ -409,7 +439,7 @@ def filter_asuz_data(request_json):
     service_code = request_json.get('usl_code')
     service_name = request_json.get('usl_name')
     lots = [lot for lot in lots if filter_condition(lot, start_date, end_date, service_code, service_name)]
-    lots = filter_by_similarity(search_request, lots)
+    lots = filter_by_similarity(search_request, lots, 'lot_name')
     result = []
     for lot in lots:
         elem = {
