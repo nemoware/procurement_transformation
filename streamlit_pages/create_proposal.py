@@ -58,6 +58,7 @@ def run():
                 st.session_state[key] = False
             else:
                 st.session_state[key] = ""
+
     if st.session_state['is_saved'] is False:
         st.session_state['subject'] = 'Где деньги,Лебовски?'
         st.session_state['segment'] = 'Корпоратив защита и защита информации'
