@@ -23,14 +23,6 @@ logger = logging.getLogger(__name__)
 def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, service_code=None, service_name=None,
                                 subject=None, guaranteed_volume=None):
     list_of_stage_ids = []
-
-    try:
-        service_code = int(service_code)
-    except Exception as ex:
-        msg = 'Не верно указан код услуги'
-        logger.error(msg)
-        abort(400, msg)
-
     current_stage_ids = (Lot.select(Lot.stage_id, fn.COUNT(Lot.stage_id).alias('num_stage_id'))
                          .join(Segment).switch(Lot)
                          .join(Sub_segment).switch(Lot)
