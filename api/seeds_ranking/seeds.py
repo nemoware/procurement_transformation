@@ -270,19 +270,19 @@ def contain_names(names: [str], test_str: str) -> float:
 
 
 def extract_names(query: str) -> [str]:
-    result = []
+    result = set()
     doc = nlp(query)
     for entity in doc.ents:
         ner_text = entity.text.lower()
         if 'газпром' not in ner_text:
-            result.append(ner_text)
+            result.add(ner_text)
     for t in doc:
         text = t.text.strip()
         if t.pos not in exclude_pos and len(text) > 1:
             if t.pos == X or t.pos == PROPN:
                 if 'газпром' not in t.text.lower():
-                    result.append(t.text.lower())
-    return result
+                    result.add(t.text.lower())
+    return list(result)
 
 
 def generate_queries(query, length=0, n=10):
