@@ -400,7 +400,7 @@ def filter_by_similarity(input_str: str, lots: [dict], subject_field: str, simil
         similarity = 1 - spatial.distance.cosine(embedding, input_embedding) / 2
         if len(names) > 0:
             name_percent = contain_names(names, lot[subject_field])
-            similarity += 0.1 * name_percent
+            similarity += 0.15 * name_percent
             if similarity >= 1:
                 similarity = 0.99
         if similarity > similarity_threshold:
