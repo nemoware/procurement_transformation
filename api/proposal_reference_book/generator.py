@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 def generate_prefilled_proposal(segment_name=None, sub_segment_name=None, service_code=None, service_name=None,
                                 subject=None, guaranteed_volume=None):
     list_of_stage_ids = []
-
     current_stage_ids = (Lot.select(Lot.stage_id, fn.COUNT(Lot.stage_id).alias('num_stage_id'))
                          .join(Segment).switch(Lot)
                          .join(Sub_segment).switch(Lot)
@@ -510,8 +509,11 @@ def generate_sheets(list_without_duplicates_of_lots, list_without_duplicates_of_
     ws = workbook["Справочник"]
     for index, lot in enumerate(list_without_duplicates_of_all_lots, start=2):
         ws.append(list(lot.values()))
+        for ind, cell in enumerate(ws[index]):
+            if ind in [4, 6, 7, 9, 10, 12, 13]:
+                cell.alignment = Alignment(horizontal='right')
         if index % 2 == 1:
-            for cell in ws[index]:
+            for ind, cell in enumerate(ws[index]):
                 cell.fill = PatternFill(fgColor="FDE9D9", fill_type="solid")
     workbook.active = workbook['Форма КП (для анализа рынка) ВР']
     virtual_workbook = save_virtual_workbook(workbook)
