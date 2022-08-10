@@ -122,7 +122,9 @@ def get_embeddings():
         embedding_loading_lock.release()
 
 
-get_embeddings()
+embedding_lazy_loading = env_var('EMBEDDING_LAZY_LOADING', 0)
+if embedding_lazy_loading == 0:
+    get_embeddings()
 
 
 def normalize(text: str) -> str:
@@ -271,8 +273,15 @@ def extract_names(query: str) -> [str]:
     result = []
     doc = nlp(query)
     for entity in doc.ents:
-        if entity.label_ in ['ORG', 'PERSON', 'PRODUCT']:
-            result.append(entity.text)
+        ner_text = entity.text.lower()
+        if 'газпром' not in ner_text:
+            result.append(ner_text)
+    for t in doc:
+        text = t.text.strip()
+        if t.pos not in exclude_pos and len(text) > 1:
+            if t.pos == X or t.pos == PROPN:
+                if 'газпром' not in t.text.lower():
+                    result.append(t.text.lower())
     return result
 
 
@@ -377,6 +386,8 @@ def filter_condition(lot: [dict], start_date: datetime, end_date: datetime, serv
 
 def filter_by_similarity(input_str: str, lots: [dict], subject_field: str, similarity_threshold=-1) -> [dict]:
     clear_input = re.sub('\\s+', ' ', input_str)
+    clear_input = re.sub('\s(ао|АО|ООО|ПАО|ооо|пао)\s', ' ', clear_input)
+
     names = extract_names(clear_input)
     clear_input = exclude_stop_words_from_query(clear_input)
     input_embedding = embed(clear_input)
