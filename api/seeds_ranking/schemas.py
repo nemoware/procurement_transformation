@@ -21,20 +21,20 @@ findlots = {
             "description": "исходный поисковый запрос"
         },
         "usl_code": {
-            "type": "string",
+            "type": ["string", "null"],
             "description": "код КТ-777"
         },
         "usl_name": {
-            "type": "string",
+            "type": ["string", "null"],
             "description": "наименование услуги КТ-777"
         },
         "start_pur_date": {
-            "type": "string",
+            "type": ["string", "null"],
             "description": "начало диапазона дат закупки",
             "format": "date"
         },
         "finish_pur_date": {
-            "type": "string",
+            "type": ["string", "null"],
             "description": "конец диапазона дат закупки",
             "format": "date"
         }
