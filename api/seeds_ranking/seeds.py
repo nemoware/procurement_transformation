@@ -364,7 +364,7 @@ def generate_seeds(query):
     return zakupki_queries, marker_queries
 
 
-def filter_condition(lot: [dict], start_date: datetime, end_date: datetime, service_code: str, service_name: str) -> bool:
+def filter_condition(lot: [dict], start_date: datetime, end_date: datetime, service_code: [str], service_name: str) -> bool:
     lot_date = None
     if lot.get('purchase_date', '') != '':
         try:
@@ -377,7 +377,7 @@ def filter_condition(lot: [dict], start_date: datetime, end_date: datetime, serv
             return False
         if end_date is not None and lot_date > end_date:
             return False
-    if service_code is not None and lot['usl_code'] != service_code:
+    if service_code is not None and len(service_code) != 0 and lot['usl_code'] not in service_code:
         return False
     if service_name is not None and lot['usl_name'] != service_name:
         return False

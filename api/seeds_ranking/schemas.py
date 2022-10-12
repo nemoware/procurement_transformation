@@ -21,7 +21,10 @@ findlots = {
             "description": "исходный поисковый запрос"
         },
         "usl_code": {
-            "type": ["string", "null"],
+            "type": ["array", "null"],
+            "items": {
+                "type": "string"
+            },
             "description": "код КТ-777"
         },
         "usl_name": {
