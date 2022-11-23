@@ -50,6 +50,7 @@ def noun_chunks(obj):
         'nmod',
         'flat:foreign',
         'obj',
+        'iobj'
     ]
     doc = obj.doc  # Ensure works on both Doc and Span.
     np_deps = [doc.vocab.strings.add(label) for label in labels]
